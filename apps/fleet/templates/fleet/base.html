@@ -16,13 +16,24 @@
                 <i class="fa-solid font-bold fa-truck-fast text-yellow-400 text-2xl"></i>
                 <span class="text-xl font-bold tracking-wide">TEAM Fleet Management</span>
             </div>
-            <nav class="flex space-x-2 mt-2 sm:mt-0">
+            <nav class="flex items-center space-x-2 mt-2 sm:mt-0">
                 <a href="{% url 'dashboard' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-800 transition">
                     <i class="fa-solid fa-chart-line mr-1"></i> Dashboard
                 </a>
-                <a href="{% url 'entry_forms' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-800 transition">
-                    <i class="fa-solid fa-pen-to-square mr-1"></i> Fuel & Trip Entries
-                </a>
+                <details class="relative">
+                    <summary class="list-none cursor-pointer px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-800 transition">
+                        <i class="fa-solid fa-pen-to-square mr-1"></i> Fuel & Trip Entries
+                        <i class="fa-solid fa-chevron-down ml-1 text-xs"></i>
+                    </summary>
+                    <div class="absolute right-0 top-full z-20 mt-1 w-48 rounded-md bg-white py-1 text-gray-800 shadow-lg">
+                        <a href="{% url 'fuel_entry' %}" class="block px-4 py-2 text-sm hover:bg-indigo-50">
+                            <i class="fa-solid fa-gas-pump mr-2 text-green-600"></i> Fuel Entry
+                        </a>
+                        <a href="{% url 'trip_entry' %}" class="block px-4 py-2 text-sm hover:bg-indigo-50">
+                            <i class="fa-solid fa-route mr-2 text-indigo-600"></i> Trip Ticket
+                        </a>
+                    </div>
+                </details>
                 <a href="{% url 'manage_riders_vehicles' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-800 transition">
                     <i class="fa-solid fa-id-card mr-1"></i> Riders & Vehicles
                 </a>

@@ -1,5 +1,3 @@
-from django.shortcuts import render
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum, Count, Avg
 from django.contrib import messages
@@ -45,27 +43,45 @@ def dashboard_view(request):
 
 
 def entry_forms_view(request):
-    trip_form = TripTicketForm(request.POST or None, prefix="trip")
-    fuel_form = FuelLogForm(request.POST or None, prefix="fuel")
+    return redirect("fuel_entry")
 
+
+def fuel_entry_view(request):
+    fuel_form = FuelLogForm(request.POST or None, prefix="fuel")
     if request.method == "POST":
-        action = request.POST.get("action_type")
-        if action == "save_trip" and trip_form.is_valid():
-            trip_form.save()
-            messages.success(request, "Trip Ticket created successfully!")
-            return redirect("entry_forms")
-        elif action == "save_fuel" and fuel_form.is_valid():
+        if fuel_form.is_valid():
             fuel_form.save()
             messages.success(request, "Fuel Log logged successfully!")
-            return redirect("entry_forms")
-        else:
-            messages.error(request, "Please fix errors in the submitted form.")
+            return redirect("fuel_entry")
+        messages.error(request, "Please fix errors in the submitted form.")
 
-    context = {
-        "trip_form": trip_form,
-        "fuel_form": fuel_form,
-    }
-    return render(request, "fleet/entry_forms.html", context)
+    recent_fuel = FuelLog.objects.select_related("driver", "vehicle").order_by(
+        "-date", "-id"
+    )[:10]
+    return render(
+        request,
+        "fleet/fuel_entry_form.html",
+        {"fuel_form": fuel_form, "recent_fuel": recent_fuel},
+    )
+
+
+def trip_entry_view(request):
+    trip_form = TripTicketForm(request.POST or None, prefix="trip")
+    if request.method == "POST":
+        if trip_form.is_valid():
+            trip_form.save()
+            messages.success(request, "Trip Ticket created successfully!")
+            return redirect("trip_entry")
+        messages.error(request, "Please fix errors in the submitted form.")
+
+    recent_trips = TripTicket.objects.select_related("driver", "vehicle").order_by(
+        "-date", "-id"
+    )[:10]
+    return render(
+        request,
+        "fleet/trip_entry_form.html",
+        {"trip_form": trip_form, "recent_trips": recent_trips},
+    )
 
 
 def manage_riders_vehicles_view(request):

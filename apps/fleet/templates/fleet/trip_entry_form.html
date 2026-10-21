@@ -1,0 +1,121 @@
+{% extends 'fleet/base.html' %} {% block title %}Trip Ticket | TEAM Fleet
+System{% endblock %} {% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+  <!-- Trip Ticket Form -->
+  <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+    <h2
+      class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex items-center"
+    >
+      <i class="fa-solid fa-route text-indigo-600 mr-2"></i> Log New Trip Ticket
+    </h2>
+    <form method="POST" action="" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="action_type" value="save_trip" />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Ticket Number</label
+          >
+          {{ trip_form.ticket_number }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Date</label
+          >
+          {{ trip_form.date }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Rider / Driver</label
+          >
+          {{ trip_form.driver }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Vehicle</label
+          >
+          {{ trip_form.vehicle }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Start Odometer</label
+          >
+          {{ trip_form.start_odometer }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >End Odometer</label
+          >
+          {{ trip_form.end_odometer }}
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-bold shadow transition"
+      >
+        Save Trip Ticket
+      </button>
+    </form>
+  </div>
+
+    <!-- Recent Trip Tickets -->
+  <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+    <h2
+      class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex items-center"
+    >
+      <i class="fa-solid fa-clipboard-list text-indigo-600 mr-2"></i> Recent
+      Trip Tickets
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-600">
+        <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+          <tr>
+            <th class="p-2">Date</th>
+            <th class="p-2">Ticket #</th>
+            <th class="p-2">Driver</th>
+            <th class="p-2">Vehicle</th>
+            <th class="p-2">Distance</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for trip in recent_trips %}
+          <tr>
+            <td class="p-2 whitespace-nowrap">{{ trip.date }}</td>
+            <td class="p-2 whitespace-nowrap font-medium text-gray-900">
+              {{ trip.ticket_number }}
+            </td>
+            <td class="p-2">{{ trip.driver.driver_name }}</td>
+            <td class="p-2 whitespace-nowrap">
+              {{ trip.vehicle.plate_number }}
+            </td>
+            <td class="p-2 whitespace-nowrap">
+              {{ trip.total_distance|floatformat:2 }} KM
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="p-4 text-center text-gray-400">
+              No trip tickets logged yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'fleet/base.html' %} {% block title %}Fuel Entry | TEAM Fleet
+System{% endblock %} {% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+  <!-- Fuel Log Form -->
+  <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+    <h2
+      class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex items-center"
+    >
+      <i class="fa-solid fa-gas-pump text-green-600 mr-2"></i> Log Fuel Receipt
+    </h2>
+    <form method="POST" action="" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="action_type" value="save_fuel" />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Receipt Number</label
+          >
+          {{ fuel_form.receipt_number }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Date</label
+          >
+          {{ fuel_form.date }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Rider / Driver</label
+          >
+          {{ fuel_form.driver }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Vehicle</label
+          >
+          {{ fuel_form.vehicle }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Liters</label
+          >
+          {{ fuel_form.liters }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Cost / Liter</label
+          >
+          {{ fuel_form.cost_per_liter }}
+        </div>
+        <div>
+          <label
+            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+            >Total Cost</label
+          >
+          {{ fuel_form.total_amount }}
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        class="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-bold shadow transition"
+      >
+        Save Fuel Log
+      </button>
+    </form>
+  </div>
+
+  <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+    <h2
+      class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex items-center"
+    >
+      <i class="fa-solid fa-list text-green-600 mr-2"></i> Recent Fuel Entries
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-gray-600">
+        <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+          <tr>
+            <th class="p-2">Date</th>
+            <th class="p-2">Vehicle</th>
+            <th class="p-2">Driver</th>
+            <th class="p-2">Liters</th>
+            <th class="p-2">Unit Price</th>
+            <th class="p-2">Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for fuel in recent_fuel %}
+          <tr>
+            <td class="p-2 whitespace-nowrap">{{ fuel.date }}</td>
+            <td class="p-2 whitespace-nowrap">{{ fuel.receipt_number }}</td>
+            <td class="p-2 whitespace-nowrap">
+              {{ fuel.vehicle.plate_number }}
+            </td>
+            <td class="p-2">{{ fuel.driver.driver_name }}</td>
+            <td class="p-2 whitespace-nowrap">{{ fuel.liters }} L</td>
+            <td class="p-2">₱ {{ fuel.cost_per_liter|floatformat:2 }}</td>
+            <td class="p-2 whitespace-nowrap">
+              ₱ {{ fuel.total_amount|floatformat:2 }}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="p-4 text-center text-gray-400">
+              No fuel entries logged yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
