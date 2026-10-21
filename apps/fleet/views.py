@@ -6,98 +6,113 @@ from django.contrib import messages
 from rest_framework import viewsets
 from .models import Vehicle, Rider, TripTicket, FuelLog, MiscTrip, ReceiptTracking
 from .forms import VehicleForm, RiderForm, TripTicketForm, FuelLogForm
-from .serializers import VehicleSerializer, RiderSerializer, TripTicketSerializer, FuelLogSerializer
+from .serializers import (
+    VehicleSerializer,
+    RiderSerializer,
+    TripTicketSerializer,
+    FuelLogSerializer,
+)
+
 
 def dashboard_view(request):
     total_vehicles = Vehicle.objects.count()
-    active_vehicles = Vehicle.objects.filter(status='Active').count()
+    active_vehicles = Vehicle.objects.filter(status="Active").count()
     total_riders = Rider.objects.count()
     total_trips = TripTicket.objects.count()
 
     fuel_stats = FuelLog.objects.aggregate(
-        total_liters=Sum('liters'),
-        total_cost=Sum('total_amount')
+        total_liters=Sum("liters"), total_cost=Sum("total_amount")
     )
 
-    recent_trips = TripTicket.objects.select_related('driver', 'vehicle').order_by('-date', '-id')[:5]
-    recent_fuel = FuelLog.objects.select_related('driver', 'vehicle').order_by('-date', '-id')[:5]
+    recent_trips = TripTicket.objects.select_related("driver", "vehicle").order_by(
+        "-date", "-id"
+    )[:5]
+    recent_fuel = FuelLog.objects.select_related("driver", "vehicle").order_by(
+        "-date", "-id"
+    )[:5]
 
     context = {
-        'total_vehicles': total_vehicles,
-        'active_vehicles': active_vehicles,
-        'total_riders': total_riders,
-        'total_trips': total_trips,
-        'total_fuel_liters': fuel_stats['total_liters'] or 0,
-        'total_fuel_cost': fuel_stats['total_cost'] or 0,
-        'recent_trips': recent_trips,
-        'recent_fuel': recent_fuel,
+        "total_vehicles": total_vehicles,
+        "active_vehicles": active_vehicles,
+        "total_riders": total_riders,
+        "total_trips": total_trips,
+        "total_fuel_liters": fuel_stats["total_liters"] or 0,
+        "total_fuel_cost": fuel_stats["total_cost"] or 0,
+        "recent_trips": recent_trips,
+        "recent_fuel": recent_fuel,
     }
-    return render(request, 'fleet/dashboard.html', context)
+    return render(request, "fleet/dashboard.html", context)
+
 
 def entry_forms_view(request):
-    trip_form = TripTicketForm(request.POST or None, prefix='trip')
-    fuel_form = FuelLogForm(request.POST or None, prefix='fuel')
+    trip_form = TripTicketForm(request.POST or None, prefix="trip")
+    fuel_form = FuelLogForm(request.POST or None, prefix="fuel")
 
-    if request.method == 'POST':
-        action = request.POST.get('action_type')
-        if action == 'save_trip' and trip_form.is_valid():
+    if request.method == "POST":
+        action = request.POST.get("action_type")
+        if action == "save_trip" and trip_form.is_valid():
             trip_form.save()
-            messages.success(request, 'Trip Ticket created successfully!')
-            return redirect('entry_forms')
-        elif action == 'save_fuel' and fuel_form.is_valid():
+            messages.success(request, "Trip Ticket created successfully!")
+            return redirect("entry_forms")
+        elif action == "save_fuel" and fuel_form.is_valid():
             fuel_form.save()
-            messages.success(request, 'Fuel Log logged successfully!')
-            return redirect('entry_forms')
+            messages.success(request, "Fuel Log logged successfully!")
+            return redirect("entry_forms")
         else:
-            messages.error(request, 'Please fix errors in the submitted form.')
+            messages.error(request, "Please fix errors in the submitted form.")
 
     context = {
-        'trip_form': trip_form,
-        'fuel_form': fuel_form,
+        "trip_form": trip_form,
+        "fuel_form": fuel_form,
     }
-    return render(request, 'fleet/entry_forms.html', context)
+    return render(request, "fleet/entry_forms.html", context)
+
 
 def manage_riders_vehicles_view(request):
-    vehicles = Vehicle.objects.all().order_by('-id')
-    riders = Rider.objects.select_related('assigned_vehicle').all().order_by('-id')
+    vehicles = Vehicle.objects.all().order_by("-id")
+    riders = Rider.objects.select_related("assigned_vehicle").all().order_by("-id")
 
-    vehicle_form = VehicleForm(prefix='vehicle')
-    rider_form = RiderForm(prefix='rider')
+    vehicle_form = VehicleForm(prefix="vehicle")
+    rider_form = RiderForm(prefix="rider")
 
-    if request.method == 'POST':
-        if 'submit_vehicle' in request.POST:
-            v_form = VehicleForm(request.POST, prefix='vehicle')
+    if request.method == "POST":
+        if "submit_vehicle" in request.POST:
+            v_form = VehicleForm(request.POST, prefix="vehicle")
             if v_form.is_valid():
                 v_form.save()
-                messages.success(request, 'Vehicle saved successfully!')
-                return redirect('manage_riders_vehicles')
-        elif 'submit_rider' in request.POST:
-            r_form = RiderForm(request.POST, prefix='rider')
+                messages.success(request, "Vehicle saved successfully!")
+                return redirect("manage_riders_vehicles")
+        elif "submit_rider" in request.POST:
+            r_form = RiderForm(request.POST, prefix="rider")
             if r_form.is_valid():
                 r_form.save()
-                messages.success(request, 'Rider / Driver saved successfully!')
-                return redirect('manage_riders_vehicles')
+                messages.success(request, "Rider / Driver saved successfully!")
+                return redirect("manage_riders_vehicles")
 
     context = {
-        'vehicles': vehicles,
-        'riders': riders,
-        'vehicle_form': vehicle_form,
-        'rider_form': rider_form,
+        "vehicles": vehicles,
+        "riders": riders,
+        "vehicle_form": vehicle_form,
+        "rider_form": rider_form,
     }
-    return render(request, 'fleet/manage_riders_vehicles.html', context)
+    return render(request, "fleet/management.html", context)
+
 
 # API ViewSets
 class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all()
     serializer_class = VehicleSerializer
 
+
 class RiderViewSet(viewsets.ModelViewSet):
     queryset = Rider.objects.all()
     serializer_class = RiderSerializer
 
+
 class TripTicketViewSet(viewsets.ModelViewSet):
     queryset = TripTicket.objects.all()
     serializer_class = TripTicketSerializer
+
 
 class FuelLogViewSet(viewsets.ModelViewSet):
     queryset = FuelLog.objects.all()
