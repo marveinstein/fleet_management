@@ -1,0 +1,95 @@
+{% extends 'fleet/base.html' %}
+
+{% block title %}Manage Riders & Vehicles | TEAM Fleet System{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+    <!-- Riders Section -->
+    <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
+            <span><i class="fa-solid fa-id-badge text-blue-600 mr-2"></i> Registered Riders & Drivers</span>
+        </h2>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Form -->
+            <form method="POST" class="space-y-3 bg-gray-50 p-4 rounded-lg">
+                {% csrf_token %}
+                <p class="font-bold text-sm text-gray-700">Add New Rider</p>
+                {{ rider_form.as_p }}
+                <button type="submit" name="submit_rider" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold shadow">
+                    Add Rider
+                </button>
+            </form>
+            <!-- Table -->
+            <div class="lg:col-span-2 overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-100 text-xs uppercase text-gray-500">
+                        <tr>
+                            <th class="p-2">Name</th>
+                            <th class="p-2">License No.</th>
+                            <th class="p-2">Status</th>
+                            <th class="p-2">Assigned Vehicle</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        {% for rider in riders %}
+                        <tr>
+                            <td class="p-2 font-semibold text-gray-800">{{ rider.driver_name }}</td>
+                            <td class="p-2">{{ rider.license_number }}</td>
+                            <td class="p-2"><span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">{{ rider.status }}</span></td>
+                            <td class="p-2">{{ rider.assigned_vehicle.plate_number|default:"None" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="p-4 text-center">No riders registered yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vehicles Section -->
+    <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
+            <span><i class="fa-solid fa-truck-moving text-indigo-600 mr-2"></i> Fleet Vehicles</span>
+        </h2>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Form -->
+            <form method="POST" class="space-y-3 bg-gray-50 p-4 rounded-lg">
+                {% csrf_token %}
+                <p class="font-bold text-sm text-gray-700">Add New Vehicle</p>
+                {{ vehicle_form.as_p }}
+                <button type="submit" name="submit_vehicle" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-semibold shadow">
+                    Add Vehicle
+                </button>
+            </form>
+            <!-- Table -->
+            <div class="lg:col-span-2 overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-100 text-xs uppercase text-gray-500">
+                        <tr>
+                            <th class="p-2">Plate Number</th>
+                            <th class="p-2">Model</th>
+                            <th class="p-2">Type</th>
+                            <th class="p-2">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        {% for vehicle in vehicles %}
+                        <tr>
+                            <td class="p-2 font-semibold text-gray-800">{{ vehicle.plate_number }}</td>
+                            <td class="p-2">{{ vehicle.model_name }}</td>
+                            <td class="p-2">{{ vehicle.vehicle_type }}</td>
+                            <td class="p-2"><span class="px-2 py-1 text-xs rounded bg-green-100 text-green-800">{{ vehicle.status }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="p-4 text-center">No vehicles registered yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}TEAM Fleet Management System{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <header class="bg-indigo-900 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid font-bold fa-truck-fast text-yellow-400 text-2xl"></i>
+                <span class="text-xl font-bold tracking-wide">TEAM Fleet Management</span>
+            </div>
+            <nav class="flex space-x-2 mt-2 sm:mt-0">
+                <a href="{% url 'dashboard' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-800 transition">
+                    <i class="fa-solid fa-chart-line mr-1"></i> Dashboard
+                </a>
+                <a href="{% url 'entry_forms' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-800 transition">
+                    <i class="fa-solid fa-pen-to-square mr-1"></i> Fuel & Trip Entries
+                </a>
+                <a href="{% url 'manage_riders_vehicles' %}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-800 transition">
+                    <i class="fa-solid fa-id-card mr-1"></i> Riders & Vehicles
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+        {% if messages %}
+            <div class="mb-4">
+                {% for message in messages %}
+                    <div class="p-4 rounded-lg text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-600{% endif %} shadow">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-400 py-4 text-center text-sm border-t border-gray-700">
+        &copy; 2026 TEAM Fleet Management System. All Rights Reserved.
+    </footer>
+</body>
+</html>

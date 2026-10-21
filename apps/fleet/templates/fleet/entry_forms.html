@@ -1,0 +1,130 @@
+{% extends 'fleet/base.html' %}
+
+{% block title %}Fuel & Trip Entries | TEAM Fleet System{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <!-- Trip Ticket Form -->
+    <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex items-center">
+            <i class="fa-solid fa-route text-indigo-600 mr-2"></i> Log New Trip Ticket
+        </h2>
+        <form method="POST" action="" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action_type" value="save_trip">
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Ticket Number</label>
+                    {{ trip_form.ticket_number }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Date</label>
+                    {{ trip_form.date }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Rider / Driver</label>
+                    {{ trip_form.driver }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Vehicle</label>
+                    {{ trip_form.vehicle }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Start Odometer</label>
+                    {{ trip_form.start_odometer }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">End Odometer</label>
+                    {{ trip_form.end_odometer }}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Destination</label>
+                {{ trip_form.destination }}
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Purpose</label>
+                {{ trip_form.purpose }}
+            </div>
+
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-bold shadow transition">
+                Save Trip Ticket
+            </button>
+        </form>
+    </div>
+
+    <!-- Fuel Log Form -->
+    <div class="bg-white p-6 rounded-xl shadow border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex items-center">
+            <i class="fa-solid fa-gas-pump text-green-600 mr-2"></i> Log Fuel Receipt
+        </h2>
+        <form method="POST" action="" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action_type" value="save_fuel">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Vehicle</label>
+                    {{ fuel_form.vehicle }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Rider / Driver</label>
+                    {{ fuel_form.driver }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Gas Station</label>
+                    {{ fuel_form.fuel_station }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Date</label>
+                    {{ fuel_form.date }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Liters</label>
+                    {{ fuel_form.liters }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Cost / Liter</label>
+                    {{ fuel_form.cost_per_liter }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Total Cost</label>
+                    {{ fuel_form.total_amount }}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Odometer Reading</label>
+                    {{ fuel_form.odometer_reading }}
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Receipt Number</label>
+                    {{ fuel_form.receipt_number }}
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-bold shadow transition">
+                Save Fuel Log
+            </button>
+        </form>
+    </div>
+
+</div>
+{% endblock %}
