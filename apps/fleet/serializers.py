@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Vehicle, Rider, TripTicket, FuelLog, ReceiptTracking
+from .models import Vehicle, Rider, TripTicket, FuelLog
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -37,7 +37,7 @@ class FuelLogSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class ReceiptTrackingSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ReceiptTracking
-        fields = "__all__"
+# class ReceiptTrackingSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = ReceiptTracking
+#         fields = "__all__"

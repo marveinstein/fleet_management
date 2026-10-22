@@ -20,9 +20,8 @@ class Vehicle(models.Model):
     ]
     VEHICLE_MODEL = [
         ("NMAX", "NMAX"),
-        ("YZF-R3", "YZF-R3"),
-        ("CBR600RR", "CBR600RR"),
-        ("Camry", "Camry"),
+        ("Hilux", "Hilux"),
+        ("Avanza", "Avanza"),
         ("F-150", "F-150"),
         ("Silverado", "Silverado"),
         ("Altima", "Altima"),
@@ -54,13 +53,11 @@ class Vehicle(models.Model):
     vehicle_make = models.CharField(
         max_length=50,
         choices=VEHICLE_MAKE,
-        help_text="e.g., Toyota, Ford",
         verbose_name="Make",
     )
     vehicle_model = models.CharField(
         max_length=100,
         choices=VEHICLE_MODEL,
-        help_text="e.g., Hilux, Civic",
         verbose_name="Model Name",
     )
     plate_number = models.CharField(
@@ -71,13 +68,11 @@ class Vehicle(models.Model):
     vehicle_type = models.CharField(
         max_length=50,
         choices=VEHICLE_TYPE,
-        help_text="e.g., Sedan, SUV",
         verbose_name="Vehicle Type",
     )
     fuel_type = models.CharField(
         max_length=50,
         choices=FUEL_TYPE,
-        help_text="e.g., Gasoline, Diesel",
         verbose_name="Fuel Type",
     )
 
@@ -86,13 +81,11 @@ class Vehicle(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0.0,
-        help_text="Current odometer reading",
         verbose_name="Mileage (KM)",
     )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        help_text="e.g., Active, Maintenance",
         verbose_name="Status",
     )
     # --- Metadata ---
@@ -117,21 +110,15 @@ class Rider(models.Model):
     ]
 
     driver_name = models.CharField(max_length=150, verbose_name="Driver / Rider Name")
-    license_number = models.CharField(
-        max_length=50, unique=True, verbose_name="License Number"
-    )
-    contact_number = models.CharField(
-        max_length=20, blank=True, null=True, verbose_name="Contact Number"
-    )
-    status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="Active", verbose_name="Status"
-    )
     assigned_vehicle = models.ForeignKey(
         Vehicle,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="assigned_riders",
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="Active", verbose_name="Status"
     )
 
     def __str__(self):
@@ -152,6 +139,10 @@ class TripTicket(models.Model):
 
     start_odometer = models.FloatField(verbose_name="Start Odometer (KM)")
     end_odometer = models.FloatField(verbose_name="End Odometer (KM)")
+
+    class Meta:
+        verbose_name = "Trip Ticket"
+        verbose_name_plural = "Trip Tickets"
 
     @property
     def total_distance(self):
@@ -185,6 +176,12 @@ class FuelLog(models.Model):
         max_digits=12, decimal_places=2, verbose_name="Total Amount"
     )
 
+    class Meta:
+        verbose_name = "Fuel Log"
+        verbose_name_plural = (
+            "Fuel Logs"  # This changes what shows up in the admin list
+        )
+
     @property
     def total_fuel(self):
         if self.liters and self.cost_per_liter:
@@ -203,24 +200,3 @@ class FuelLog(models.Model):
 
     def __str__(self):
         return f"Fuel #{self.id} - {self.vehicle.plate_number} ({self.date})"
-
-
-class ReceiptTracking(models.Model):
-    receipt_number = models.CharField(
-        max_length=100, unique=True, verbose_name="Receipt Number"
-    )
-    date = models.DateField(default=timezone.now)
-    description = models.CharField(max_length=255)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    attached_to_type = models.CharField(
-        max_length=50,
-        choices=[
-            ("Fuel", "Fuel"),
-            ("Trip", "Trip"),
-            ("Maintenance", "Maintenance"),
-            ("Other", "Other"),
-        ],
-    )
-
-    def __str__(self):
-        return f"Receipt #{self.receipt_number} - ${self.amount}"

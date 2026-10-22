@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Sum, Count, Avg
 from django.contrib import messages
 from rest_framework import viewsets
-from .models import Vehicle, Rider, TripTicket, FuelLog, ReceiptTracking
+from .models import Vehicle, Rider, TripTicket, FuelLog
 from .forms import VehicleForm, RiderForm, TripTicketForm, FuelLogForm
 from .serializers import (
     VehicleSerializer,

@@ -52,8 +52,6 @@ class RiderForm(forms.ModelForm):
         model = Rider
         fields = [
             "driver_name",
-            "license_number",
-            "contact_number",
             "status",
             "assigned_vehicle",
         ]
@@ -63,12 +61,12 @@ class RiderForm(forms.ModelForm):
                     "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 }
             ),
-            "status": forms.Select(
+            "assigned_vehicle": forms.Select(
                 attrs={
                     "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 }
             ),
-            "assigned_vehicle": forms.Select(
+            "status": forms.Select(
                 attrs={
                     "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 }
