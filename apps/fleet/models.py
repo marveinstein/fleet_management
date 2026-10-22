@@ -11,7 +11,7 @@ class Vehicle(models.Model):
         ("Honda", "Honda"),
         ("Toyota", "Toyota"),
         ("Ford", "Ford"),
-        ("Chevrolet", "Chevrolet"),
+        ("Suzuki", "Suzuki"),
         ("Nissan", "Nissan"),
         ("Mitsubishi", "Mitsubishi"),
         ("Isuzu", "Isuzu"),
@@ -32,15 +32,17 @@ class Vehicle(models.Model):
         ("Sorento", "Sorento"),
     ]
     VEHICLE_TYPE = [
-        ("Motorcycle", "Motorcycle"),
-        ("Car", "Car"),
-        ("Truck", "Truck"),
-        ("Van", "Van"),
+        ("MTC", "Motorcycle"),
+        ("SED", "Sedan"),
+        ("SUV", "SUV"),
+        ("TRK", "Truck"),
+        ("VAN", "Van"),
     ]
     FUEL_TYPE = [
-        ("Gasoline", "Gasoline"),
-        ("Diesel", "Diesel"),
-        ("Electric", "Electric"),
+        ("GAS", "Gasoline"),
+        ("DSL", "Diesel"),
+        ("ELE", "Electric"),
+        ("HYB", "Hybrid"),
     ]
     STATUS_CHOICES = [
         ("Active", "Active"),
@@ -48,29 +50,63 @@ class Vehicle(models.Model):
         ("Inactive", "Inactive"),
     ]
 
-    plate_number = models.CharField(
-        max_length=20, unique=True, verbose_name="Plate Number"
-    )
+    # --- Identity Fields ---
     vehicle_make = models.CharField(
-        max_length=50, choices=VEHICLE_MAKE, default="Yamaha", verbose_name="Make"
+        max_length=50,
+        choices=VEHICLE_MAKE,
+        help_text="e.g., Toyota, Ford",
+        verbose_name="Make",
     )
     vehicle_model = models.CharField(
         max_length=100,
         choices=VEHICLE_MODEL,
-        default="YZF-R3",
+        help_text="e.g., Hilux, Civic",
         verbose_name="Model Name",
     )
+    plate_number = models.CharField(
+        max_length=20, unique=True, verbose_name="Plate Number"
+    )
+
+    # --- Specifications ---
     vehicle_type = models.CharField(
-        max_length=50, choices=VEHICLE_TYPE, default="Van", verbose_name="Vehicle Type"
+        max_length=50,
+        choices=VEHICLE_TYPE,
+        help_text="e.g., Sedan, SUV",
+        verbose_name="Vehicle Type",
     )
     fuel_type = models.CharField(
-        max_length=50, choices=FUEL_TYPE, default="Diesel", verbose_name="Fuel Type"
+        max_length=50,
+        choices=FUEL_TYPE,
+        help_text="e.g., Gasoline, Diesel",
+        verbose_name="Fuel Type",
     )
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Active")
+
+    # --- Live State Tracking ---
+    mileage = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.0,
+        help_text="Current odometer reading",
+        verbose_name="Mileage (KM)",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        help_text="e.g., Active, Maintenance",
+        verbose_name="Status",
+    )
+    # --- Metadata ---
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["vehicle_make", "vehicle_model"]
+        verbose_name = "Vehicle"
+        verbose_name_plural = "Vehicles"
 
     def __str__(self):
-        return f"{self.plate_number} ({self.vehicle_model})"
+        # Human-readable representation used in Django Admin and shells
+        return f"{self.vehicle_make} {self.vehicle_model} ({self.plate_number})"
 
 
 class Rider(models.Model):
@@ -87,7 +123,9 @@ class Rider(models.Model):
     contact_number = models.CharField(
         max_length=20, blank=True, null=True, verbose_name="Contact Number"
     )
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Active")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="Active", verbose_name="Status"
+    )
     assigned_vehicle = models.ForeignKey(
         Vehicle,
         on_delete=models.SET_NULL,
@@ -104,9 +142,7 @@ class TripTicket(models.Model):
     ticket_number = models.CharField(
         max_length=50, unique=True, verbose_name="Trip Ticket Number"
     )
-    date = models.DateField(default=timezone.now)
-    departure_time = models.TimeField(blank=True, null=True)
-    arrival_time = models.TimeField(blank=True, null=True)
+    date = models.DateField(default=timezone.now, verbose_name="Date")
     driver = models.ForeignKey(
         Rider, on_delete=models.CASCADE, related_name="trip_tickets"
     )
@@ -116,9 +152,6 @@ class TripTicket(models.Model):
 
     start_odometer = models.FloatField(verbose_name="Start Odometer (KM)")
     end_odometer = models.FloatField(verbose_name="End Odometer (KM)")
-    destination = models.CharField(max_length=255)
-    purpose = models.TextField()
-    passengers = models.CharField(max_length=255, blank=True, null=True)
 
     @property
     def total_distance(self):
@@ -135,23 +168,22 @@ class FuelLog(models.Model):
         max_length=100, blank=True, null=True, verbose_name="Receipt / Invoice Number"
     )
     date = models.DateField(default=timezone.now)
-    fuel_station = models.CharField(
-        max_length=150, verbose_name="Gas Station / Vendor"
-    )
+    fuel_station = models.CharField(max_length=150, verbose_name="Gas Station / Vendor")
     driver = models.ForeignKey(
         Rider, on_delete=models.CASCADE, related_name="fuel_logs"
     )
     vehicle = models.ForeignKey(
         Vehicle, on_delete=models.CASCADE, related_name="fuel_logs"
     )
-    liters = models.FloatField(verbose_name="Liters Pumped")
+    liters = models.DecimalField(
+        max_digits=10, decimal_places=3, verbose_name="Liters Pumped"
+    )
     cost_per_liter = models.DecimalField(
         max_digits=10, decimal_places=2, verbose_name="Cost per Liter"
     )
     total_amount = models.DecimalField(
         max_digits=12, decimal_places=2, verbose_name="Total Amount"
     )
-    odometer_reading = models.FloatField(verbose_name="Odometer Reading (KM)")
 
     @property
     def total_fuel(self):
@@ -164,27 +196,13 @@ class FuelLog(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.total_amount and self.liters and self.cost_per_liter:
-            self.total_amount = round((str(self.liters)) * self.cost_per_liter, 2)
+            self.total_amount = round(
+                float(self.liters) * float(self.cost_per_liter), 2
+            )
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Fuel #{self.id} - {self.vehicle.plate_number} ({self.date})"
-
-
-class MiscTrip(models.Model):
-    trip_title = models.CharField(max_length=200, verbose_name="Misc Trip Title")
-    driver = models.ForeignKey(Rider, on_delete=models.SET_NULL, null=True, blank=True)
-    vehicle = models.ForeignKey(
-        Vehicle, on_delete=models.SET_NULL, null=True, blank=True
-    )
-    date = models.DateField(default=timezone.now)
-    expenses = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0.00, verbose_name="Expense Amount"
-    )
-    notes = models.TextField(blank=True, null=True)
-
-    def __str__(self):
-        return f"{self.trip_title} ({self.date})"
 
 
 class ReceiptTracking(models.Model):

@@ -12,38 +12,35 @@ System{% endblock %} {% block content %}
       {% csrf_token %}
       <input type="hidden" name="action_type" value="save_fuel" />
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label
-            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
-            >Receipt Number</label
-          >
-          {{ fuel_form.receipt_number }}
-        </div>
-        <div>
-          <label
-            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
-            >Date</label
-          >
-          {{ fuel_form.date }}
-        </div>
-        <div>
-          <label
-            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
-            >Rider / Driver</label
-          >
-          {{ fuel_form.driver }}
-        </div>
-        <div>
-          <label
-            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
-            >Vehicle</label
-          >
-          {{ fuel_form.vehicle }}
-        </div>
+      <!-- <div class="grid grid-cols-1 sm:grid-cols-2 gap-4"> -->
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+          >Receipt Number</label
+        >
+        {{ fuel_form.receipt_number }}
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+          >Date</label
+        >
+        {{ fuel_form.date }}
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+          >Driver</label
+        >
+        {{ fuel_form.driver }}
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-gray-600 mb-1"
+          >Vehicle</label
+        >
+        {{ fuel_form.vehicle }}
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <!-- </div> -->
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div>
           <label
             class="block text-xs font-semibold uppercase text-gray-600 mb-1"
@@ -57,13 +54,6 @@ System{% endblock %} {% block content %}
             >Cost / Liter</label
           >
           {{ fuel_form.cost_per_liter }}
-        </div>
-        <div>
-          <label
-            class="block text-xs font-semibold uppercase text-gray-600 mb-1"
-            >Total Cost</label
-          >
-          {{ fuel_form.total_amount }}
         </div>
       </div>
 
@@ -87,7 +77,7 @@ System{% endblock %} {% block content %}
         <thead class="bg-gray-50 text-xs uppercase text-gray-500">
           <tr>
             <th class="p-2">Date</th>
-            <th class="p-2">Vehicle</th>
+            <th class="p-2">Receipt Number</th>
             <th class="p-2">Driver</th>
             <th class="p-2">Liters</th>
             <th class="p-2">Unit Price</th>
@@ -99,10 +89,7 @@ System{% endblock %} {% block content %}
           <tr>
             <td class="p-2 whitespace-nowrap">{{ fuel.date }}</td>
             <td class="p-2 whitespace-nowrap">{{ fuel.receipt_number }}</td>
-            <td class="p-2 whitespace-nowrap">
-              {{ fuel.vehicle.plate_number }}
-            </td>
-            <td class="p-2">{{ fuel.driver.driver_name }}</td>
+            <td class="p-2 whitespace-nowrap">{{ fuel.driver.driver_name }}</td>
             <td class="p-2 whitespace-nowrap">{{ fuel.liters }} L</td>
             <td class="p-2">₱ {{ fuel.cost_per_liter|floatformat:2 }}</td>
             <td class="p-2 whitespace-nowrap">

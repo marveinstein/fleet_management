@@ -84,13 +84,8 @@ class TripTicketForm(forms.ModelForm):
             "driver",
             "vehicle",
             "date",
-            "departure_time",
-            "arrival_time",
             "start_odometer",
             "end_odometer",
-            "destination",
-            "purpose",
-            "passengers",
         ]
         widgets = {
             "ticket_number": forms.TextInput(
@@ -143,8 +138,6 @@ class TripTicketForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["destination"].required = False
-        self.fields["purpose"].required = False
 
 
 class FuelLogForm(forms.ModelForm):
@@ -152,25 +145,22 @@ class FuelLogForm(forms.ModelForm):
         model = FuelLog
         fields = [
             "vehicle",
-            "driver",
             "date",
-            "fuel_station",
+            "receipt_number",
+            "driver",
             "liters",
             "cost_per_liter",
-            "total_amount",
-            "odometer_reading",
-            "receipt_number",
         ]
         widgets = {
-            "receipt_number": forms.TextInput(
-                attrs={
-                    "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                }
-            ),
             "date": forms.DateInput(
                 attrs={
                     "type": "date",
                     "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none",
+                }
+            ),
+            "receipt_number": forms.TextInput(
+                attrs={
+                    "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 }
             ),
             "vehicle": forms.Select(
@@ -201,17 +191,8 @@ class FuelLogForm(forms.ModelForm):
                     "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none",
                 }
             ),
-            "odometer_reading": forms.NumberInput(
-                attrs={
-                    "class": "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                }
-            ),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["fuel_station"].required = False
-        self.fields["odometer_reading"].required = False
-
-    def clean_odometer_reading(self):
-        return self.cleaned_data["odometer_reading"] or 0
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.fields["total_amount"].required = False

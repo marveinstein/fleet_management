@@ -1,117 +1,145 @@
-{% extends 'fleet/base.html' %}
-
-{% block title %}Dashboard | TEAM Fleet Management{% endblock %}
-
-{% block content %}
+{% extends 'fleet/base.html' %} {% block title %}Dashboard | TEAM Fleet
+Management{% endblock %} {% block content %}
 <div class="space-y-6">
+  <div class="flex justify-between items-center">
+    <h1 class="text-2xl font-bold text-gray-800">Fleet Analytics & Overview</h1>
+  </div>
 
-    <div class="flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-gray-800">Fleet Analytics & Overview</h1>
-        <div class="space-x-2">
-            <a href="{% url 'fuel_entry' %}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow">
-                + New Log Entry
-            </a>
-        </div>
+  <!-- Stat Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div
+      class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4"
+    >
+      <div class="p-3 bg-blue-100 text-blue-600 rounded-lg">
+        <i class="fa-solid fa-truck text-2xl"></i>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 uppercase font-semibold">
+          Active Vehicles
+        </p>
+        <p class="text-2xl font-bold text-gray-800">
+          {{ active_vehicles }} / {{ total_vehicles }}
+        </p>
+      </div>
+    </div>
+    <div
+      class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4"
+    >
+      <div class="p-3 bg-green-100 text-green-600 rounded-lg">
+        <i class="fa-solid fa-users text-2xl"></i>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 uppercase font-semibold">
+          Total Riders
+        </p>
+        <p class="text-2xl font-bold text-gray-800">{{ total_riders }}</p>
+      </div>
+    </div>
+    <div
+      class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4"
+    >
+      <div class="p-3 bg-yellow-100 text-yellow-600 rounded-lg">
+        <i class="fa-solid fa-route text-2xl"></i>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 uppercase font-semibold">
+          Total Trip Tickets
+        </p>
+        <p class="text-2xl font-bold text-gray-800">{{ total_trips }}</p>
+      </div>
+    </div>
+    <div
+      class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4"
+    >
+      <div class="p-3 bg-red-100 text-red-600 rounded-lg">
+        <i class="fa-solid fa-gas-pump text-2xl"></i>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 uppercase font-semibold">
+          Total Fuel Cost
+        </p>
+        <p class="text-2xl font-bold text-gray-800">
+          ₱ {{ total_fuel_cost|floatformat:2 }}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Data Tables -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Recent Trips -->
+    <div class="bg-white rounded-xl shadow border border-gray-100 p-5">
+      <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+        <i class="fa-solid fa-clipboard-list text-indigo-500 mr-2"></i> Recent
+        Trip Tickets
+      </h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-gray-600">
+          <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+              <th class="p-2">Ticket #</th>
+              <th class="p-2">Driver</th>
+              <th class="p-2">Vehicle</th>
+              <th class="p-2">Distance</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for trip in recent_trips %}
+            <tr>
+              <td class="p-2 font-medium text-gray-900">
+                {{ trip.ticket_number }}
+              </td>
+              <td class="p-2">{{ trip.driver.driver_name }}</td>
+              <td class="p-2">{{ trip.vehicle.plate_number }}</td>
+              <td class="p-2">{{ trip.total_distance|floatformat:2 }} KM</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="p-4 text-center text-gray-400">
+                No trips logged yet.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <!-- Stat Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4">
-            <div class="p-3 bg-blue-100 text-blue-600 rounded-lg"><i class="fa-solid fa-truck text-2xl"></i></div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase font-semibold">Active Vehicles</p>
-                <p class="text-2xl font-bold text-gray-800">{{ active_vehicles }} / {{ total_vehicles }}</p>
-            </div>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4">
-            <div class="p-3 bg-green-100 text-green-600 rounded-lg"><i class="fa-solid fa-users text-2xl"></i></div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase font-semibold">Total Riders</p>
-                <p class="text-2xl font-bold text-gray-800">{{ total_riders }}</p>
-            </div>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4">
-            <div class="p-3 bg-yellow-100 text-yellow-600 rounded-lg"><i class="fa-solid fa-route text-2xl"></i></div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase font-semibold">Total Trip Tickets</p>
-                <p class="text-2xl font-bold text-gray-800">{{ total_trips }}</p>
-            </div>
-        </div>
-        <div class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4">
-            <div class="p-3 bg-red-100 text-red-600 rounded-lg"><i class="fa-solid fa-gas-pump text-2xl"></i></div>
-            <div>
-                <p class="text-xs text-gray-500 uppercase font-semibold">Total Fuel Cost</p>
-                <p class="text-2xl font-bold text-gray-800">${{ total_fuel_cost|floatformat:2 }}</p>
-            </div>
-        </div>
+    <!-- Recent Fuel Logs -->
+    <div class="bg-white rounded-xl shadow border border-gray-100 p-5">
+      <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+        <i class="fa-solid fa-gas-pump text-green-500 mr-2"></i> Recent Fuel
+        Logs
+      </h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-gray-600">
+          <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+              <th class="p-2">Date</th>
+              <th class="p-2">Vehicle</th>
+              <th class="p-2">Liters</th>
+              <th class="p-2">Cost</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for fuel in recent_fuel %}
+            <tr>
+              <td class="p-2 font-medium text-gray-900">{{ fuel.date }}</td>
+              <td class="p-2">{{ fuel.vehicle.plate_number }}</td>
+              <td class="p-2">{{ fuel.liters }} L</td>
+              <td class="p-2">₱ {{ fuel.total_amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="p-4 text-center text-gray-400">
+                No fuel entries logged yet.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-
-    <!-- Recent Data Tables -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        <!-- Recent Trips -->
-        <div class="bg-white rounded-xl shadow border border-gray-100 p-5">
-            <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <i class="fa-solid fa-clipboard-list text-indigo-500 mr-2"></i> Recent Trip Tickets
-            </h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-gray-600">
-                    <thead class="bg-gray-50 text-xs uppercase text-gray-500">
-                        <tr>
-                            <th class="p-2">Ticket #</th>
-                            <th class="p-2">Driver</th>
-                            <th class="p-2">Vehicle</th>
-                            <th class="p-2">Distance</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y">
-                        {% for trip in recent_trips %}
-                        <tr>
-                            <td class="p-2 font-medium text-gray-900">{{ trip.ticket_number }}</td>
-                            <td class="p-2">{{ trip.driver.driver_name }}</td>
-                            <td class="p-2">{{ trip.vehicle.plate_number }}</td>
-                            <td class="p-2">{{ trip.total_distance }} KM</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="p-4 text-center text-gray-400">No trips logged yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Recent Fuel Logs -->
-        <div class="bg-white rounded-xl shadow border border-gray-100 p-5">
-            <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <i class="fa-solid fa-gas-pump text-green-500 mr-2"></i> Recent Fuel Logs
-            </h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-gray-600">
-                    <thead class="bg-gray-50 text-xs uppercase text-gray-500">
-                        <tr>
-                            <th class="p-2">Date</th>
-                            <th class="p-2">Vehicle</th>
-                            <th class="p-2">Liters</th>
-                            <th class="p-2">Cost</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y">
-                        {% for fuel in recent_fuel %}
-                        <tr>
-                            <td class="p-2 font-medium text-gray-900">{{ fuel.date }}</td>
-                            <td class="p-2">{{ fuel.vehicle.plate_number }}</td>
-                            <td class="p-2">{{ fuel.liters }} L</td>
-                            <td class="p-2">${{ fuel.total_amount }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="p-4 text-center text-gray-400">No fuel entries logged yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-    </div>
-
+  </div>
 </div>
 {% endblock %}
