@@ -50,6 +50,9 @@ class Vehicle(models.Model):
     ]
 
     # --- Identity Fields ---
+    plate_number = models.CharField(
+        max_length=20, unique=True, verbose_name="Plate Number"
+    )
     vehicle_make = models.CharField(
         max_length=50,
         choices=VEHICLE_MAKE,
@@ -59,9 +62,6 @@ class Vehicle(models.Model):
         max_length=100,
         choices=VEHICLE_MODEL,
         verbose_name="Model Name",
-    )
-    plate_number = models.CharField(
-        max_length=20, unique=True, verbose_name="Plate Number"
     )
 
     # --- Specifications ---
