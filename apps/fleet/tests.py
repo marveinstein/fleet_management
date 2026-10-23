@@ -10,7 +10,6 @@ class TripEntrySubmissionTests(TestCase):
         vehicle = Vehicle.objects.create(plate_number="TEST-001")
         rider = Rider.objects.create(
             driver_name="Test Driver",
-            license_number="TEST-LICENSE-001",
         )
 
         response = self.client.post(
@@ -37,7 +36,6 @@ class FuelEntrySubmissionTests(TestCase):
         vehicle = Vehicle.objects.create(plate_number="TEST-002")
         rider = Rider.objects.create(
             driver_name="Test Fuel Driver",
-            license_number="TEST-LICENSE-002",
         )
 
         response = self.client.post(
@@ -56,3 +54,73 @@ class FuelEntrySubmissionTests(TestCase):
         fuel_log = FuelLog.objects.get(vehicle=vehicle)
         self.assertEqual(fuel_log.fuel_station, "")
         self.assertEqual(fuel_log.odometer_reading, 0)
+
+
+class ManagementFormTests(TestCase):
+    def test_invalid_rider_form_is_returned_for_the_rider_dialog(self):
+        response = self.client.post(
+            reverse("manage_riders_vehicles"),
+            {
+                "submit_rider": "Add Rider",
+                "rider-driver_name": "",
+                "rider-status": "Active",
+                "rider-assigned_vehicle": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["rider_form"].errors)
+        self.assertEqual(response.context["open_form"], "rider")
+
+    def test_invalid_vehicle_form_is_returned_for_the_vehicle_dialog(self):
+        response = self.client.post(
+            reverse("manage_riders_vehicles"),
+            {
+                "submit_vehicle": "Add Vehicle",
+                "vehicle-plate_number": "",
+                "vehicle-vehicle_make": "Toyota",
+                "vehicle-vehicle_model": "Hilux",
+                "vehicle-vehicle_type": "SED",
+                "vehicle-fuel_type": "GAS",
+                "vehicle-status": "Active",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["vehicle_form"].errors)
+        self.assertEqual(response.context["open_form"], "vehicle")
+
+    def test_submits_rider_from_the_management_page(self):
+        response = self.client.post(
+            reverse("manage_riders_vehicles"),
+            {
+                "submit_rider": "Add Rider",
+                "rider-driver_name": "Test Management Rider",
+                "rider-status": "Active",
+                "rider-assigned_vehicle": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("manage_riders_vehicles"))
+        self.assertTrue(
+            Rider.objects.filter(driver_name="Test Management Rider").exists()
+        )
+
+    def test_submits_vehicle_from_the_management_page(self):
+        response = self.client.post(
+            reverse("manage_riders_vehicles"),
+            {
+                "submit_vehicle": "Add Vehicle",
+                "vehicle-plate_number": "TEST-MANAGEMENT-001",
+                "vehicle-vehicle_make": "Toyota",
+                "vehicle-vehicle_model": "Hilux",
+                "vehicle-vehicle_type": "SED",
+                "vehicle-fuel_type": "GAS",
+                "vehicle-status": "Active",
+            },
+        )
+
+        self.assertRedirects(response, reverse("manage_riders_vehicles"))
+        self.assertTrue(
+            Vehicle.objects.filter(plate_number="TEST-MANAGEMENT-001").exists()
+        )

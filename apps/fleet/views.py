@@ -90,26 +90,32 @@ def manage_riders_vehicles_view(request):
 
     vehicle_form = VehicleForm(prefix="vehicle")
     rider_form = RiderForm(prefix="rider")
+    open_form = None
 
     if request.method == "POST":
         if "submit_vehicle" in request.POST:
-            v_form = VehicleForm(request.POST, prefix="vehicle")
-            if v_form.is_valid():
-                v_form.save()
+            vehicle_form = VehicleForm(request.POST, prefix="vehicle")
+            open_form = "vehicle"
+            if vehicle_form.is_valid():
+                vehicle_form.save()
                 messages.success(request, "Vehicle saved successfully!")
                 return redirect("manage_riders_vehicles")
+            messages.error(request, "Please fix the errors in the vehicle form.")
         elif "submit_rider" in request.POST:
-            r_form = RiderForm(request.POST, prefix="rider")
-            if r_form.is_valid():
-                r_form.save()
+            rider_form = RiderForm(request.POST, prefix="rider")
+            open_form = "rider"
+            if rider_form.is_valid():
+                rider_form.save()
                 messages.success(request, "Rider / Driver saved successfully!")
                 return redirect("manage_riders_vehicles")
+            messages.error(request, "Please fix the errors in the rider form.")
 
     context = {
         "vehicles": vehicles,
         "riders": riders,
         "vehicle_form": vehicle_form,
         "rider_form": rider_form,
+        "open_form": open_form,
     }
     return render(request, "fleet/management.html", context)
 
