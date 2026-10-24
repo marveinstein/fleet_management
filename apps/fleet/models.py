@@ -183,7 +183,9 @@ class TripTicket(models.Model):
     )
 
     origin = models.CharField(max_length=200, default="Central Logistics Hub")
-    destination = models.CharField(max_length=200, default="Regional Distribution Point")
+    destination = models.CharField(
+        max_length=200, default="Regional Distribution Point"
+    )
     purpose = models.CharField(
         max_length=255, blank=True, default="Operational Deliveries & Routing"
     )
@@ -279,7 +281,11 @@ class VehicleTelemetry(models.Model):
         Vehicle, on_delete=models.CASCADE, related_name="telemetry_logs", db_index=True
     )
     driver = models.ForeignKey(
-        Rider, on_delete=models.SET_NULL, null=True, blank=True, related_name="telemetry_logs"
+        Rider,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="telemetry_logs",
     )
     latitude = models.FloatField()
     longitude = models.FloatField()
@@ -363,9 +369,7 @@ class MaintenanceAlert(models.Model):
     severity = models.CharField(
         max_length=20, choices=SEVERITY_CHOICES, default="warning"
     )
-    status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="open"
-    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
     message = models.CharField(max_length=255)
     current_odometer = models.FloatField(default=0.0)
     due_odometer = models.FloatField(default=0.0)
@@ -432,174 +436,123 @@ class DriverPerformance(models.Model):
         return f"{self.driver.driver_name} - {self.month.strftime('%B %Y')} (Score: {self.safety_score})"
 
 
-class VehicleTelemetry(models.Model):
-    EVENT_CHOICES = [
-        ("normal", "Normal Ping"),
-        ("speeding", "Speeding Warning"),
-        ("harsh_braking", "Harsh Braking"),
-        ("rapid_acceleration", "Rapid Acceleration"),
-        ("low_fuel", "Low Fuel Warning"),
-        ("engine_fault", "Engine Fault"),
-    ]
-    ENGINE_STATUS = [
-        ("running", "Running"),
-        ("idle", "Idling"),
-        ("stopped", "Stopped"),
-    ]
+# class MaintenanceSchedule(models.Model):
+#     SERVICE_CHOICES = [
+#         ("oil_change", "Engine Oil & Filter Change"),
+#         ("brake_service", "Brake Pad & Rotor Inspection"),
+#         ("tire_rotation", "Tire Rotation & Wheel Alignment"),
+#         ("battery_check", "Battery & Electrical System Check"),
+#         ("transmission", "Transmission Fluid & Drivetrain Flush"),
+#         ("annual_inspection", "Comprehensive Fleet Safety Inspection"),
+#     ]
 
-    vehicle = models.ForeignKey(
-        Vehicle, on_delete=models.CASCADE, related_name="telemetry_logs", db_index=True
-    )
-    driver = models.ForeignKey(
-        Rider, on_delete=models.SET_NULL, null=True, blank=True, related_name="telemetry_logs"
-    )
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    speed = models.FloatField(default=0.0, help_text="km/h")
-    heading = models.FloatField(default=0.0, help_text="degrees 0-360")
-    fuel_level = models.FloatField(default=100.0, help_text="percentage 0-100")
-    engine_status = models.CharField(
-        max_length=20, choices=ENGINE_STATUS, default="running"
-    )
-    odometer = models.FloatField(default=0.0)
-    battery_voltage = models.FloatField(default=12.6)
-    engine_temp = models.FloatField(default=85.0)
-    event_type = models.CharField(
-        max_length=30, choices=EVENT_CHOICES, default="normal"
-    )
-    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+#     vehicle = models.ForeignKey(
+#         Vehicle, on_delete=models.CASCADE, related_name="maintenance_schedules"
+#     )
+#     service_type = models.CharField(max_length=50, choices=SERVICE_CHOICES)
+#     interval_km = models.IntegerField(default=5000, help_text="Mileage interval in KM")
+#     interval_days = models.IntegerField(default=180, help_text="Days interval")
+#     last_service_km = models.FloatField(default=0.0)
+#     last_service_date = models.DateField(default=timezone.now)
+#     next_due_km = models.FloatField(default=5000.0)
+#     next_due_date = models.DateField(null=True, blank=True)
+#     is_active = models.BooleanField(default=True)
 
-    class Meta:
-        ordering = ["-timestamp"]
-        indexes = [
-            models.Index(fields=["vehicle", "-timestamp"]),
-            models.Index(fields=["event_type", "-timestamp"]),
-        ]
+#     class Meta:
+#         ordering = ["vehicle", "next_due_km"]
 
-    def __str__(self):
-        return f"{self.vehicle.plate_number} @ {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+#     def __str__(self):
+#         return f"{self.vehicle.plate_number} - {self.get_service_type_display()} (Due: {self.next_due_km} KM)"
 
 
-class MaintenanceSchedule(models.Model):
-    SERVICE_CHOICES = [
-        ("oil_change", "Engine Oil & Filter Change"),
-        ("brake_service", "Brake Pad & Rotor Inspection"),
-        ("tire_rotation", "Tire Rotation & Wheel Alignment"),
-        ("battery_check", "Battery & Electrical System Check"),
-        ("transmission", "Transmission Fluid & Drivetrain Flush"),
-        ("annual_inspection", "Comprehensive Fleet Safety Inspection"),
-    ]
+# class MaintenanceAlert(models.Model):
+#     SEVERITY_CHOICES = [
+#         ("critical", "Critical Overdue"),
+#         ("warning", "Due Soon"),
+#         ("info", "Routine Reminder"),
+#     ]
+#     STATUS_CHOICES = [
+#         ("open", "Open Alert"),
+#         ("scheduled", "Service Scheduled"),
+#         ("resolved", "Resolved"),
+#     ]
 
-    vehicle = models.ForeignKey(
-        Vehicle, on_delete=models.CASCADE, related_name="maintenance_schedules"
-    )
-    service_type = models.CharField(max_length=50, choices=SERVICE_CHOICES)
-    interval_km = models.IntegerField(default=5000, help_text="Mileage interval in KM")
-    interval_days = models.IntegerField(default=180, help_text="Days interval")
-    last_service_km = models.FloatField(default=0.0)
-    last_service_date = models.DateField(default=timezone.now)
-    next_due_km = models.FloatField(default=5000.0)
-    next_due_date = models.DateField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
+#     vehicle = models.ForeignKey(
+#         Vehicle, on_delete=models.CASCADE, related_name="maintenance_alerts"
+#     )
+#     schedule = models.ForeignKey(
+#         MaintenanceSchedule,
+#         on_delete=models.SET_NULL,
+#         null=True,
+#         blank=True,
+#         related_name="alerts",
+#     )
+#     service_type = models.CharField(max_length=100)
+#     severity = models.CharField(
+#         max_length=20, choices=SEVERITY_CHOICES, default="warning"
+#     )
+#     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
+#     message = models.CharField(max_length=255)
+#     current_odometer = models.FloatField(default=0.0)
+#     due_odometer = models.FloatField(default=0.0)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     resolved_at = models.DateTimeField(null=True, blank=True)
+#     notes = models.TextField(blank=True, default="")
 
-    class Meta:
-        ordering = ["vehicle", "next_due_km"]
+#     class Meta:
+#         ordering = ["-created_at"]
 
-    def __str__(self):
-        return f"{self.vehicle.plate_number} - {self.get_service_type_display()} (Due: {self.next_due_km} KM)"
-
-
-class MaintenanceAlert(models.Model):
-    SEVERITY_CHOICES = [
-        ("critical", "Critical Overdue"),
-        ("warning", "Due Soon"),
-        ("info", "Routine Reminder"),
-    ]
-    STATUS_CHOICES = [
-        ("open", "Open Alert"),
-        ("scheduled", "Service Scheduled"),
-        ("resolved", "Resolved"),
-    ]
-
-    vehicle = models.ForeignKey(
-        Vehicle, on_delete=models.CASCADE, related_name="maintenance_alerts"
-    )
-    schedule = models.ForeignKey(
-        MaintenanceSchedule,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="alerts",
-    )
-    service_type = models.CharField(max_length=100)
-    severity = models.CharField(
-        max_length=20, choices=SEVERITY_CHOICES, default="warning"
-    )
-    status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="open"
-    )
-    message = models.CharField(max_length=255)
-    current_odometer = models.FloatField(default=0.0)
-    due_odometer = models.FloatField(default=0.0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    resolved_at = models.DateTimeField(null=True, blank=True)
-    notes = models.TextField(blank=True, default="")
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"[{self.severity.upper()}] {self.vehicle.plate_number} - {self.service_type}"
+#     def __str__(self):
+#         return f"[{self.severity.upper()}] {self.vehicle.plate_number} - {self.service_type}"
 
 
-class MaintenanceLog(models.Model):
-    vehicle = models.ForeignKey(
-        Vehicle, on_delete=models.CASCADE, related_name="maintenance_logs"
-    )
-    alert = models.ForeignKey(
-        MaintenanceAlert,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="service_record",
-    )
-    service_type = models.CharField(max_length=100)
-    service_date = models.DateField(default=timezone.now)
-    odometer_at_service = models.FloatField(default=0.0)
-    cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
-    service_provider = models.CharField(
-        max_length=150, blank=True, default="Authorized Fleet Center"
-    )
-    technician = models.CharField(max_length=100, blank=True, default="")
-    notes = models.TextField(blank=True, default="")
-    created_at = models.DateTimeField(auto_now_add=True)
+# class MaintenanceLog(models.Model):
+#     vehicle = models.ForeignKey(
+#         Vehicle, on_delete=models.CASCADE, related_name="maintenance_logs"
+#     )
+#     alert = models.ForeignKey(
+#         MaintenanceAlert,
+#         on_delete=models.SET_NULL,
+#         null=True,
+#         blank=True,
+#         related_name="service_record",
+#     )
+#     service_type = models.CharField(max_length=100)
+#     service_date = models.DateField(default=timezone.now)
+#     odometer_at_service = models.FloatField(default=0.0)
+#     cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+#     service_provider = models.CharField(
+#         max_length=150, blank=True, default="Authorized Fleet Center"
+#     )
+#     technician = models.CharField(max_length=100, blank=True, default="")
+#     notes = models.TextField(blank=True, default="")
+#     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        ordering = ["-service_date", "-id"]
+#     class Meta:
+#         ordering = ["-service_date", "-id"]
 
-    def __str__(self):
-        return f"{self.vehicle.plate_number} - {self.service_type} (${self.cost})"
+#     def __str__(self):
+#         return f"{self.vehicle.plate_number} - {self.service_type} (${self.cost})"
 
 
-class DriverPerformance(models.Model):
-    driver = models.ForeignKey(
-        Rider, on_delete=models.CASCADE, related_name="performance_history"
-    )
-    month = models.DateField(help_text="First day of the month")
-    total_distance_km = models.FloatField(default=0.0)
-    trips_completed = models.IntegerField(default=0)
-    fuel_consumed_liters = models.FloatField(default=0.0)
-    efficiency_km_per_liter = models.FloatField(default=0.0)
-    safety_score = models.FloatField(default=95.0)  # 0 to 100
-    harsh_braking_count = models.IntegerField(default=0)
-    rapid_accel_count = models.IntegerField(default=0)
-    speeding_count = models.IntegerField(default=0)
-    idling_hours = models.FloatField(default=0.0)
+# class DriverPerformance(models.Model):
+#     driver = models.ForeignKey(
+#         Rider, on_delete=models.CASCADE, related_name="performance_history"
+#     )
+#     month = models.DateField(help_text="First day of the month")
+#     total_distance_km = models.FloatField(default=0.0)
+#     trips_completed = models.IntegerField(default=0)
+#     fuel_consumed_liters = models.FloatField(default=0.0)
+#     efficiency_km_per_liter = models.FloatField(default=0.0)
+#     safety_score = models.FloatField(default=95.0)  # 0 to 100
+#     harsh_braking_count = models.IntegerField(default=0)
+#     rapid_accel_count = models.IntegerField(default=0)
+#     speeding_count = models.IntegerField(default=0)
+#     idling_hours = models.FloatField(default=0.0)
 
-    class Meta:
-        ordering = ["-month", "driver"]
-        unique_together = ["driver", "month"]
+#     class Meta:
+#         ordering = ["-month", "driver"]
+#         unique_together = ["driver", "month"]
 
-    def __str__(self):
-        return f"{self.driver.driver_name} - {self.month.strftime('%B %Y')} (Score: {self.safety_score})"
-
+#     def __str__(self):
+#         return f"{self.driver.driver_name} - {self.month.strftime('%B %Y')} (Score: {self.safety_score})"

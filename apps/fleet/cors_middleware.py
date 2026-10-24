@@ -7,8 +7,9 @@ class CustomCorsMiddleware(MiddlewareMixin):
     Lightweight, self-contained CORS middleware allowing cross-origin
     API requests from React frontend during development and testing.
     """
+
     def process_request(self, request):
-        if request.method == 'OPTIONS':
+        if request.method == "OPTIONS":
             response = HttpResponse()
             self._add_cors_headers(response)
             return response
@@ -18,7 +19,10 @@ class CustomCorsMiddleware(MiddlewareMixin):
         return response
 
     def _add_cors_headers(self, response):
-        response['Access-Control-Allow-Origin'] = '*'
-        response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, X-CSRFToken'
-
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = (
+            "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        )
+        response["Access-Control-Allow-Headers"] = (
+            "Content-Type, Authorization, X-Requested-With, X-CSRFToken"
+        )
