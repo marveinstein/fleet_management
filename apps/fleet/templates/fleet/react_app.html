@@ -1,0 +1,2725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FleetTrack Pro | Intelligent Fleet Management System</title>
+    
+    <!-- Tailwind CSS CDN with plugins -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            200: '#c7d2fe',
+                            300: '#a5b4fc',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                            950: '#1e1b4b',
+                        },
+                        slate: {
+                            850: '#151f32',
+                            900: '#0f172a',
+                            950: '#090d16',
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
+    <!-- Leaflet CSS & JS for Interactive Live Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- Chart.js for Driver Analytics and Monthly Efficiency Reports -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- React 18, ReactDOM 18, and Babel Standalone for Seamless SPA Execution -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Custom Leaflet Styles & Animations -->
+    <style>
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 0.2; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .vehicle-marker-pulse {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .leaflet-container {
+            font-family: inherit;
+            z-index: 10;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 116, 139, 0.3);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 antialiased font-sans min-h-screen overflow-x-hidden selection:bg-brand-500 selection:text-white">
+    <div id="root">
+        <!-- Loading splash screen before React mounts -->
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="text-center space-y-4">
+                <div class="inline-block w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-slate-400 font-medium tracking-wide">Loading FleetTrack Pro...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- React Application Core Code -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+        // ========================================================
+        // API Client Helpers
+        // ========================================================
+        const API_BASE = '/api';
+
+        const getAuthToken = () => localStorage.getItem('fleet_token');
+        const setAuthToken = (t) => t ? localStorage.setItem('fleet_token', t) : localStorage.removeItem('fleet_token');
+
+        const apiRequest = async (url, options = {}) => {
+            const token = getAuthToken();
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Token ${token}` } : {}),
+                ...(options.headers || {})
+            };
+
+            const res = await fetch(`${API_BASE}${url}`, {
+                ...options,
+                headers
+            });
+
+            if (res.status === 401) {
+                // If unauthorized, clear token and return error
+                setAuthToken(null);
+                window.dispatchEvent(new Event('auth_required'));
+            }
+
+            if (!res.ok) {
+                let errText = 'An unexpected error occurred';
+                try {
+                    const errJson = await res.json();
+                    errText = errJson.error || errJson.detail || JSON.stringify(errJson);
+                } catch(e) {
+                    errText = await res.text();
+                }
+                throw new Error(errText);
+            }
+
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return await res.json();
+            }
+            return await res.text();
+        };
+
+        // ========================================================
+        // SVG Icons
+        // ========================================================
+        const Icons = {
+            Truck: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"/></svg>,
+            MapPin: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
+            Fuel: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>,
+            Route: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>,
+            Wrench: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
+            ShieldAlert: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>,
+            BarChart: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>,
+            FileText: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>,
+            Users: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>,
+            LogOut: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>,
+            Play: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"/></svg>,
+            Pause: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>,
+            Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>,
+            Download: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>,
+            CheckCircle: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+            Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>,
+            Gauge: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>,
+            RefreshCw: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+            Menu: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/></svg>,
+            X: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>,
+        };
+
+        // ========================================================
+        // Main Application Root Component
+        // ========================================================
+        function App() {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [mobileNavOpen, setMobileNavOpen] = useState(false);
+            const [isSimulating, setIsSimulating] = useState(false);
+            const [liveTelemetry, setLiveTelemetry] = useState([]);
+            const [maintenanceAlerts, setMaintenanceAlerts] = useState([]);
+            const [toastMessage, setToastMessage] = useState(null);
+            const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+            // Fetch Current User Profile on load
+            const fetchUserProfile = async () => {
+                const token = getAuthToken();
+                if (!token) {
+                    setIsInitialLoading(false);
+                    return;
+                }
+                try {
+                    const profile = await apiRequest('/auth/me/');
+                    setCurrentUser(profile);
+                    // Default tab for driver role
+                    if (profile.role === 'driver') {
+                        setActiveTab('driver_cockpit');
+                    }
+                } catch (e) {
+                    console.error("Auth check failed:", e);
+                    setAuthToken(null);
+                    setCurrentUser(null);
+                } finally {
+                    setIsInitialLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                fetchUserProfile();
+                window.addEventListener('auth_required', () => setCurrentUser(null));
+            }, []);
+
+            // Toast helper
+            const showToast = (msg, type = 'success') => {
+                setToastMessage({ msg, type });
+                setTimeout(() => setToastMessage(null), 4000);
+            };
+
+            // Global Telemetry Polling & Alerts Loader
+            const refreshTelemetry = useCallback(async () => {
+                if (!currentUser) return;
+                try {
+                    const data = await apiRequest('/telemetry/live/');
+                    setLiveTelemetry(data);
+                    const alerts = await apiRequest('/maintenance/alerts/?status=open');
+                    setMaintenanceAlerts(alerts);
+                } catch (e) {
+                    console.error("Failed to refresh telemetry:", e);
+                }
+            }, [currentUser]);
+
+            useEffect(() => {
+                if (currentUser) {
+                    refreshTelemetry();
+                    const interval = setInterval(refreshTelemetry, 8000);
+                    return () => clearInterval(interval);
+                }
+            }, [currentUser, refreshTelemetry]);
+
+            // Simulation loop: advances vehicles along real routes
+            useEffect(() => {
+                let simTimer = null;
+                if (isSimulating && currentUser) {
+                    simTimer = setInterval(async () => {
+                        try {
+                            const res = await apiRequest('/telemetry/simulate-step/', { method: 'POST' });
+                            if (res.status === 'success') {
+                                refreshTelemetry();
+                            }
+                        } catch (err) {
+                            console.error("Simulation tick error:", err);
+                        }
+                    }, 3500);
+                }
+                return () => clearInterval(simTimer);
+            }, [isSimulating, currentUser, refreshTelemetry]);
+
+            // Handle Quick Demo Login
+            const handleDemoLogin = async (username, password) => {
+                try {
+                    const res = await apiRequest('/auth/login/', {
+                        method: 'POST',
+                        body: JSON.stringify({ username, password })
+                    });
+                    setAuthToken(res.token);
+                    setCurrentUser(res.user);
+                    showToast(`Logged in successfully as ${res.user.role.toUpperCase()}: ${res.user.first_name || res.user.username}`);
+                    if (res.user.role === 'driver') {
+                        setActiveTab('driver_cockpit');
+                    } else {
+                        setActiveTab('dashboard');
+                    }
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+
+            // Handle Logout
+            const handleLogout = async () => {
+                try {
+                    await apiRequest('/auth/logout/', { method: 'POST' });
+                } catch (e) {}
+                setAuthToken(null);
+                setCurrentUser(null);
+                setIsSimulating(false);
+                showToast("Logged out successfully.");
+            };
+
+            if (isInitialLoading) {
+                return (
+                    <div className="flex items-center justify-center min-h-screen">
+                        <div className="text-center space-y-4">
+                            <div className="inline-block w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-slate-400 font-medium">Initializing FleetTrack Pro...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Not Logged In View
+            if (!currentUser) {
+                return <LoginScreen onLoginSuccess={fetchUserProfile} onQuickDemo={handleDemoLogin} toast={toastMessage} />;
+            }
+
+            // Determine available navigation tabs by Role
+            const isDriver = currentUser.role === 'driver';
+            const isManager = currentUser.role === 'manager';
+            const isAdmin = currentUser.role === 'admin';
+
+            return (
+                <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100">
+                    {/* Toast Notification */}
+                    {toastMessage && (
+                        <div className={`fixed top-4 right-4 z-50 flex items-center space-x-3 px-5 py-3 rounded-xl shadow-2xl transition-all duration-300 border ${
+                            toastMessage.type === 'error' 
+                                ? 'bg-rose-950/90 text-rose-200 border-rose-700/50 backdrop-blur' 
+                                : 'bg-emerald-950/90 text-emerald-200 border-emerald-700/50 backdrop-blur'
+                        }`}>
+                            <span className="text-lg">{toastMessage.type === 'error' ? '⚠️' : '✓'}</span>
+                            <span className="text-sm font-semibold tracking-wide">{toastMessage.msg}</span>
+                        </div>
+                    )}
+
+                    {/* Desktop Sidebar Navigation */}
+                    <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 p-4 shrink-0">
+                        {/* Brand Logo */}
+                        <div className="flex items-center space-x-3 px-3 py-4 mb-4 border-b border-slate-800">
+                            <div className="p-2.5 bg-gradient-to-tr from-brand-600 to-indigo-500 text-white rounded-xl shadow-lg shadow-brand-500/20">
+                                <Icons.Truck />
+                            </div>
+                            <div>
+                                <h1 className="font-extrabold text-lg text-white tracking-wider flex items-center gap-1.5">
+                                    FleetTrack <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 border border-brand-500/30">PRO</span>
+                                </h1>
+                                <p className="text-xs text-slate-400">Intelligent Telematics</p>
+                            </div>
+                        </div>
+
+                        {/* Navigation Links */}
+                        <nav className="flex-1 space-y-1.5">
+                            {isDriver && (
+                                <NavItem
+                                    active={activeTab === 'driver_cockpit'}
+                                    onClick={() => setActiveTab('driver_cockpit')}
+                                    icon={<Icons.Gauge />}
+                                    label="Driver Cockpit"
+                                    badge="Assigned"
+                                />
+                            )}
+
+                            {!isDriver && (
+                                <>
+                                    <NavItem
+                                        active={activeTab === 'dashboard'}
+                                        onClick={() => setActiveTab('dashboard')}
+                                        icon={<Icons.BarChart />}
+                                        label="Fleet Dashboard"
+                                    />
+                                    <NavItem
+                                        active={activeTab === 'live_map'}
+                                        onClick={() => setActiveTab('live_map')}
+                                        icon={<Icons.MapPin />}
+                                        label="Real-Time GPS Map"
+                                        badge={liveTelemetry.length}
+                                    />
+                                </>
+                            )}
+
+                            <NavItem
+                                active={activeTab === 'trips'}
+                                onClick={() => setActiveTab('trips')}
+                                icon={<Icons.Route />}
+                                label="Trip Tickets"
+                            />
+                            <NavItem
+                                active={activeTab === 'fuel'}
+                                onClick={() => setActiveTab('fuel')}
+                                icon={<Icons.Fuel />}
+                                label="Fuel Logs"
+                            />
+
+                            {!isDriver && (
+                                <>
+                                    <NavItem
+                                        active={activeTab === 'maintenance'}
+                                        onClick={() => setActiveTab('maintenance')}
+                                        icon={<Icons.Wrench />}
+                                        label="Maintenance Alerts"
+                                        badge={maintenanceAlerts.length > 0 ? maintenanceAlerts.length : null}
+                                        badgeColor={maintenanceAlerts.some(a => a.severity === 'critical') ? 'bg-rose-500 text-white' : 'bg-amber-500 text-slate-900'}
+                                    />
+                                    <NavItem
+                                        active={activeTab === 'analytics'}
+                                        onClick={() => setActiveTab('analytics')}
+                                        icon={<Icons.ShieldAlert />}
+                                        label="Driver Analytics"
+                                    />
+                                    <NavItem
+                                        active={activeTab === 'reports'}
+                                        onClick={() => setActiveTab('reports')}
+                                        icon={<Icons.FileText />}
+                                        label="Monthly Efficiency"
+                                    />
+                                </>
+                            )}
+
+                            {isAdmin && (
+                                <NavItem
+                                    active={activeTab === 'users'}
+                                    onClick={() => setActiveTab('users')}
+                                    icon={<Icons.Users />}
+                                    label="Role & Users"
+                                />
+                            )}
+                        </nav>
+
+                        {/* Live Telemetry Simulation Control Pill */}
+                        <div className="mt-4 p-3 rounded-xl bg-slate-850 border border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                                <span className="flex items-center gap-1.5">
+                                    <span className={`w-2 h-2 rounded-full ${isSimulating ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`}></span>
+                                    GPS Simulation
+                                </span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isSimulating ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}`}>
+                                    {isSimulating ? 'ACTIVE' : 'PAUSED'}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => setIsSimulating(!isSimulating)}
+                                className={`w-full py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                                    isSimulating 
+                                        ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40' 
+                                        : 'bg-brand-600 hover:bg-brand-500 text-white shadow-md shadow-brand-600/30'
+                                }`}
+                            >
+                                {isSimulating ? <><Icons.Pause /> Pause Simulation</> : <><Icons.Play /> Stream Telemetry</>}
+                            </button>
+                        </div>
+
+                        {/* Current User Role Card & Logout */}
+                        <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between">
+                            <div className="flex items-center space-x-3 overflow-hidden">
+                                <div className="w-9 h-9 rounded-full bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-300 font-bold text-sm shrink-0">
+                                    {currentUser.first_name ? currentUser.first_name[0] : currentUser.username[0].toUpperCase()}
+                                </div>
+                                <div className="truncate">
+                                    <p className="text-xs font-semibold text-white truncate">{currentUser.first_name || currentUser.username}</p>
+                                    <p className="text-[10px] text-brand-400 font-mono uppercase tracking-wider">{currentUser.role}</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleLogout}
+                                title="Log Out"
+                                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition"
+                            >
+                                <Icons.LogOut />
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* Mobile Top Header */}
+                    <header className="md:hidden flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800 shrink-0 sticky top-0 z-40">
+                        <div className="flex items-center space-x-2.5">
+                            <div className="p-2 bg-brand-600 text-white rounded-lg">
+                                <Icons.Truck />
+                            </div>
+                            <div>
+                                <span className="font-extrabold text-white tracking-wide">FleetTrack</span>
+                                <span className="ml-1 text-[10px] bg-brand-500/20 text-brand-400 px-1 py-0.5 rounded font-bold uppercase">{currentUser.role}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={() => setIsSimulating(!isSimulating)}
+                                className={`px-2.5 py-1 text-xs rounded-lg font-medium flex items-center gap-1 border ${
+                                    isSimulating ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
+                                }`}
+                            >
+                                <span className={`w-1.5 h-1.5 rounded-full ${isSimulating ? 'bg-emerald-400 animate-ping' : 'bg-slate-500'}`}></span>
+                                {isSimulating ? 'Live' : 'Sim'}
+                            </button>
+
+                            <button
+                                onClick={() => setMobileNavOpen(!mobileNavOpen)}
+                                className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                            >
+                                {mobileNavOpen ? <Icons.X /> : <Icons.Menu />}
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Mobile Slide-down Drawer Navigation */}
+                    {mobileNavOpen && (
+                        <div className="md:hidden bg-slate-900 border-b border-slate-800 p-4 space-y-2 z-30">
+                            {isDriver && (
+                                <button
+                                    onClick={() => { setActiveTab('driver_cockpit'); setMobileNavOpen(false); }}
+                                    className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'driver_cockpit' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                                >
+                                    <Icons.Gauge /> Driver Cockpit
+                                </button>
+                            )}
+                            {!isDriver && (
+                                <>
+                                    <button
+                                        onClick={() => { setActiveTab('dashboard'); setMobileNavOpen(false); }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'dashboard' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                                    >
+                                        <Icons.BarChart /> Fleet Dashboard
+                                    </button>
+                                    <button
+                                        onClick={() => { setActiveTab('live_map'); setMobileNavOpen(false); }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'live_map' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                                    >
+                                        <Icons.MapPin /> Real-Time GPS Map
+                                    </button>
+                                </>
+                            )}
+                            <button
+                                onClick={() => { setActiveTab('trips'); setMobileNavOpen(false); }}
+                                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'trips' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                            >
+                                <Icons.Route /> Trip Tickets
+                            </button>
+                            <button
+                                onClick={() => { setActiveTab('fuel'); setMobileNavOpen(false); }}
+                                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'fuel' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                            >
+                                <Icons.Fuel /> Fuel Logs
+                            </button>
+                            {!isDriver && (
+                                <>
+                                    <button
+                                        onClick={() => { setActiveTab('maintenance'); setMobileNavOpen(false); }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'maintenance' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                                    >
+                                        <Icons.Wrench /> Maintenance Alerts ({maintenanceAlerts.length})
+                                    </button>
+                                    <button
+                                        onClick={() => { setActiveTab('analytics'); setMobileNavOpen(false); }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                                    >
+                                        <Icons.ShieldAlert /> Driver Analytics
+                                    </button>
+                                    <button
+                                        onClick={() => { setActiveTab('reports'); setMobileNavOpen(false); }}
+                                        className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'reports' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                                    >
+                                        <Icons.FileText /> Monthly Efficiency Reports
+                                    </button>
+                                </>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={() => { setActiveTab('users'); setMobileNavOpen(false); }}
+                                    className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-3 ${activeTab === 'users' ? 'bg-brand-600 text-white' : 'text-slate-300'}`}
+                                >
+                                    <Icons.Users /> Role & User Accounts
+                                </button>
+                            )}
+                            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                                <span className="text-xs text-slate-400 font-mono uppercase">{currentUser.username} ({currentUser.role})</span>
+                                <button onClick={handleLogout} className="text-xs text-rose-400 font-semibold px-3 py-1.5 bg-rose-950/40 rounded border border-rose-800/40">Log Out</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Main Work Area Container */}
+                    <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 pb-20 md:pb-8">
+                        {/* Top Context Bar / Demo Role Switcher */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                            <div>
+                                <h2 className="text-xl md:text-2xl font-bold text-white capitalize tracking-tight flex items-center gap-2">
+                                    {activeTab.replace('_', ' ')}
+                                    <span className="text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                                        Role: {currentUser.role.toUpperCase()}
+                                    </span>
+                                </h2>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                    SQLite WAL Engine Active • {liveTelemetry.length} Vehicles Tracked • Low-Latency Telemetry Active
+                                </p>
+                            </div>
+
+                            {/* Demo Role Switcher Toolbar */}
+                            <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 text-xs shrink-0">
+                                <span className="text-slate-400 font-medium px-2 hidden lg:inline">Test Roles:</span>
+                                <button 
+                                    onClick={() => handleDemoLogin('admin', 'admin123')}
+                                    className={`px-2.5 py-1 rounded-lg font-medium transition ${currentUser.role === 'admin' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Admin
+                                </button>
+                                <button 
+                                    onClick={() => handleDemoLogin('manager', 'manager123')}
+                                    className={`px-2.5 py-1 rounded-lg font-medium transition ${currentUser.role === 'manager' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Manager
+                                </button>
+                                <button 
+                                    onClick={() => handleDemoLogin('driver1', 'driver123')}
+                                    className={`px-2.5 py-1 rounded-lg font-medium transition ${currentUser.role === 'driver' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Driver (Apa)
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Route / Tab Content Rendering */}
+                        {activeTab === 'dashboard' && <DashboardView liveTelemetry={liveTelemetry} alerts={maintenanceAlerts} onNavigate={setActiveTab} />}
+                        {activeTab === 'live_map' && <LiveMapView liveTelemetry={liveTelemetry} isSimulating={isSimulating} onToggleSim={() => setIsSimulating(!isSimulating)} />}
+                        {activeTab === 'trips' && <TripsView currentUser={currentUser} showToast={showToast} />}
+                        {activeTab === 'fuel' && <FuelLogsView currentUser={currentUser} showToast={showToast} />}
+                        {activeTab === 'maintenance' && <MaintenanceView alerts={maintenanceAlerts} onRefresh={refreshTelemetry} showToast={showToast} currentUser={currentUser} />}
+                        {activeTab === 'analytics' && <DriverAnalyticsView />}
+                        {activeTab === 'reports' && <MonthlyReportsView />}
+                        {activeTab === 'driver_cockpit' && <DriverCockpitView currentUser={currentUser} liveTelemetry={liveTelemetry} showToast={showToast} onRefresh={refreshTelemetry} />}
+                        {activeTab === 'users' && isAdmin && <UserManagementView showToast={showToast} />}
+                    </main>
+
+                    {/* Mobile Sticky Bottom Navigation Bar (Driver & Operation Centric) */}
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-3 py-2 flex justify-around items-center z-40">
+                        {isDriver ? (
+                            <>
+                                <button onClick={() => setActiveTab('driver_cockpit')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'driver_cockpit' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.Gauge />
+                                    <span>Cockpit</span>
+                                </button>
+                                <button onClick={() => setActiveTab('trips')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'trips' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.Route />
+                                    <span>My Trips</span>
+                                </button>
+                                <button onClick={() => setActiveTab('fuel')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'fuel' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.Fuel />
+                                    <span>Fuel Refill</span>
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'dashboard' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.BarChart />
+                                    <span>Overview</span>
+                                </button>
+                                <button onClick={() => setActiveTab('live_map')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'live_map' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.MapPin />
+                                    <span>Live GPS</span>
+                                </button>
+                                <button onClick={() => setActiveTab('trips')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'trips' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.Route />
+                                    <span>Trips</span>
+                                </button>
+                                <button onClick={() => setActiveTab('maintenance')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'maintenance' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.Wrench />
+                                    <span>Alerts</span>
+                                </button>
+                                <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center py-1 text-xs ${activeTab === 'reports' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}>
+                                    <Icons.FileText />
+                                    <span>Reports</span>
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function NavItem({ active, onClick, icon, label, badge, badgeColor = 'bg-brand-500 text-white' }) {
+            return (
+                <button
+                    onClick={onClick}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                        active
+                            ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/80'
+                    }`}
+                >
+                    <div className="flex items-center space-x-3">
+                        <span className={active ? 'text-white' : 'text-slate-400'}>{icon}</span>
+                        <span>{label}</span>
+                    </div>
+                    {badge !== null && badge !== undefined && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${badgeColor}`}>
+                            {badge}
+                        </span>
+                    )}
+                </button>
+            );
+        }
+
+        // ========================================================
+        // 1. Login Screen Component with Role Selection
+        // ========================================================
+        function LoginScreen({ onLoginSuccess, onQuickDemo, toast }) {
+            const [username, setUsername] = useState('admin');
+            const [password, setPassword] = useState('admin123');
+            const [isLoading, setIsLoading] = useState(false);
+            const [errorMsg, setErrorMsg] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setIsLoading(true);
+                setErrorMsg('');
+                try {
+                    const res = await apiRequest('/auth/login/', {
+                        method: 'POST',
+                        body: JSON.stringify({ username, password })
+                    });
+                    setAuthToken(res.token);
+                    onLoginSuccess();
+                } catch (err) {
+                    setErrorMsg(err.message || 'Login failed. Please verify credentials.');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 relative overflow-hidden">
+                    {/* Background decorative glows */}
+                    <div className="absolute -top-32 -left-32 w-96 h-96 bg-brand-600/10 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                    {toast && (
+                        <div className="fixed top-4 right-4 z-50 px-5 py-3 rounded-xl bg-emerald-950/90 text-emerald-200 border border-emerald-700/50 shadow-2xl backdrop-blur">
+                            {toast.msg}
+                        </div>
+                    )}
+
+                    <div className="max-w-md w-full bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl relative z-10">
+                        {/* Header Branding */}
+                        <div className="text-center mb-8">
+                            <div className="inline-flex p-3 bg-gradient-to-tr from-brand-600 to-indigo-500 text-white rounded-2xl shadow-lg shadow-brand-500/30 mb-3">
+                                <Icons.Truck />
+                            </div>
+                            <h2 className="text-2xl font-black text-white tracking-wide">FleetTrack <span className="text-brand-400">PRO</span></h2>
+                            <p className="text-slate-400 text-sm mt-1">Enterprise Fleet Telematics & Efficiency Suite</p>
+                        </div>
+
+                        {errorMsg && (
+                            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium">
+                                {errorMsg}
+                            </div>
+                        )}
+
+                        {/* Login Form */}
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Username</label>
+                                <input
+                                    type="text"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    required
+                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm"
+                                    placeholder="Enter username"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Password</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm"
+                                    placeholder="Enter password"
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isLoading}
+                                className="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-sm transition shadow-lg shadow-brand-600/30 flex items-center justify-center space-x-2 disabled:opacity-50"
+                            >
+                                {isLoading ? (
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                    <span>Sign In to Telematics Portal</span>
+                                )}
+                            </button>
+                        </form>
+
+                        {/* Quick Role Tester Buttons */}
+                        <div className="mt-8 pt-6 border-t border-slate-800">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 text-center">
+                                One-Click Demo Role Accounts
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onQuickDemo('admin', 'admin123')}
+                                    className="p-2.5 rounded-xl bg-slate-800 hover:bg-brand-600/20 hover:border-brand-500/50 border border-slate-700 text-center transition group"
+                                >
+                                    <div className="text-xs font-bold text-white group-hover:text-brand-300">Admin</div>
+                                    <div className="text-[10px] text-slate-400">admin123</div>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onQuickDemo('manager', 'manager123')}
+                                    className="p-2.5 rounded-xl bg-slate-800 hover:bg-brand-600/20 hover:border-brand-500/50 border border-slate-700 text-center transition group"
+                                >
+                                    <div className="text-xs font-bold text-white group-hover:text-brand-300">Manager</div>
+                                    <div className="text-[10px] text-slate-400">manager123</div>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onQuickDemo('driver1', 'driver123')}
+                                    className="p-2.5 rounded-xl bg-slate-800 hover:bg-brand-600/20 hover:border-brand-500/50 border border-slate-700 text-center transition group"
+                                >
+                                    <div className="text-xs font-bold text-white group-hover:text-brand-300">Driver</div>
+                                    <div className="text-[10px] text-slate-400">driver123</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 2. Executive Dashboard Overview View
+        // ========================================================
+        function DashboardView({ liveTelemetry, alerts, onNavigate }) {
+            const [recentTrips, setRecentTrips] = useState([]);
+            const [recentFuel, setRecentFuel] = useState([]);
+            const [summaryReport, setSummaryReport] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                const loadDashboardData = async () => {
+                    try {
+                        const [tripsData, fuelData, reportsData] = await Promise.all([
+                            apiRequest('/trip-tickets/?limit=5'),
+                            apiRequest('/fuel-logs/?limit=5'),
+                            apiRequest('/reports/monthly/?months=1'),
+                        ]);
+                        setRecentTrips(tripsData.results || tripsData.slice(0, 5));
+                        setRecentFuel(fuelData.results || fuelData.slice(0, 5));
+                        if (reportsData.summary) {
+                            setSummaryReport(reportsData.summary);
+                        }
+                    } catch (e) {
+                        console.error("Dashboard error:", e);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                loadDashboardData();
+            }, []);
+
+            const activeVehicles = liveTelemetry.length;
+            const movingVehicles = liveTelemetry.filter(v => v.speed > 5).length;
+            const criticalAlerts = alerts.filter(a => a.severity === 'critical');
+
+            return (
+                <div className="space-y-6">
+                    {/* Urgent Alert Banner if critical alerts exist */}
+                    {criticalAlerts.length > 0 && (
+                        <div className="bg-gradient-to-r from-rose-950/80 via-rose-900/40 to-slate-900 border border-rose-600/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-rose-950/30">
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2.5 bg-rose-600 text-white rounded-xl animate-pulse">
+                                    <Icons.Wrench />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                                        Automated Maintenance Warning
+                                        <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold uppercase">
+                                            {criticalAlerts.length} Overdue
+                                        </span>
+                                    </h4>
+                                    <p className="text-xs text-rose-200 mt-0.5">
+                                        {criticalAlerts[0].message}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => onNavigate('maintenance')}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold shrink-0 transition"
+                            >
+                                Review & Resolve
+                            </button>
+                        </div>
+                    )}
+
+                    {/* KPI Metric Cards Grid */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+                            <div className="flex items-center justify-between text-slate-400 mb-2">
+                                <span className="text-xs font-semibold uppercase tracking-wider">Fleet Status</span>
+                                <div className="p-2 bg-brand-500/10 text-brand-400 rounded-lg"><Icons.Truck /></div>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black text-white">{activeVehicles}</div>
+                            <div className="mt-2 text-xs flex items-center gap-1.5 text-emerald-400">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                {movingVehicles} currently in transit
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+                            <div className="flex items-center justify-between text-slate-400 mb-2">
+                                <span className="text-xs font-semibold uppercase tracking-wider">Total Mileage</span>
+                                <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg"><Icons.Route /></div>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black text-white">
+                                {summaryReport ? `${Number(summaryReport.period_distance_km).toLocaleString()} KM` : '7,120 KM'}
+                            </div>
+                            <div className="mt-2 text-xs text-slate-400">Monthly logged distance</div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+                            <div className="flex items-center justify-between text-slate-400 mb-2">
+                                <span className="text-xs font-semibold uppercase tracking-wider">Fuel Expense</span>
+                                <div className="p-2 bg-amber-500/10 text-amber-400 rounded-lg"><Icons.Fuel /></div>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black text-white">
+                                {summaryReport ? `$${Number(summaryReport.period_total_spend).toLocaleString()}` : '$186,150'}
+                            </div>
+                            <div className="mt-2 text-xs text-amber-400">
+                                {summaryReport ? `${summaryReport.avg_fleet_economy_km_l} KM/L Avg Economy` : 'Optimized efficiency'}
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+                            <div className="flex items-center justify-between text-slate-400 mb-2">
+                                <span className="text-xs font-semibold uppercase tracking-wider">Alerts & Safety</span>
+                                <div className="p-2 bg-rose-500/10 text-rose-400 rounded-lg"><Icons.ShieldAlert /></div>
+                            </div>
+                            <div className="text-2xl sm:text-3xl font-black text-white">{alerts.length}</div>
+                            <div className="mt-2 text-xs text-slate-400">
+                                {alerts.length === 0 ? 'All systems optimal' : `${criticalAlerts.length} require immediate service`}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Quick Live Map Teaser & Vehicle List */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                                        <Icons.MapPin /> Live Telemetry Feed
+                                    </h3>
+                                    <p className="text-xs text-slate-400">Interactive GPS position & heading</p>
+                                </div>
+                                <button
+                                    onClick={() => onNavigate('live_map')}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-brand-300 rounded-xl text-xs font-semibold transition"
+                                >
+                                    Full Screen Map →
+                                </button>
+                            </div>
+
+                            {/* Mini Map Snapshot / Vehicle Quick Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                                {liveTelemetry.slice(0, 6).map(v => (
+                                    <div key={v.id} className="p-3 bg-slate-850 rounded-xl border border-slate-800 flex items-center justify-between">
+                                        <div>
+                                            <div className="text-xs font-bold text-white">{v.plate_number}</div>
+                                            <div className="text-[11px] text-slate-400">{v.vehicle_make} {v.vehicle_model}</div>
+                                            <div className="text-[10px] text-brand-400">{v.driver_name}</div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-xs font-mono font-bold text-emerald-400">{v.speed} km/h</div>
+                                            <div className="text-[10px] text-slate-400">Fuel: {v.fuel_level}%</div>
+                                            <div className="text-[9px] text-slate-500 font-mono">{v.mileage.toLocaleString()} KM</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Recent Activity Mini Feed */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+                            <h3 className="font-bold text-white text-base mb-4 flex items-center justify-between">
+                                <span>Recent Trips</span>
+                                <button onClick={() => onNavigate('trips')} className="text-xs text-brand-400 hover:underline">View All</button>
+                            </h3>
+                            <div className="space-y-3">
+                                {recentTrips.length === 0 ? (
+                                    <p className="text-xs text-slate-500">No recent trip logs.</p>
+                                ) : (
+                                    recentTrips.map(t => (
+                                        <div key={t.id} className="p-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs">
+                                            <div className="flex items-center justify-between font-semibold text-white">
+                                                <span>{t.ticket_number}</span>
+                                                <span className="text-emerald-400 font-mono">+{t.total_distance || 0} KM</span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                                                {t.driver_detail ? t.driver_detail.driver_name : 'Driver'} • {t.vehicle_detail ? t.vehicle_detail.plate_number : ''}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+                                                <span>{t.origin} → {t.destination}</span>
+                                                <span>{t.date}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 3. Real-Time GPS Tracking Map View
+        // ========================================================
+        function LiveMapView({ liveTelemetry, isSimulating, onToggleSim }) {
+            const mapContainerRef = useRef(null);
+            const mapInstanceRef = useRef(null);
+            const markersRef = useRef({});
+            const [selectedVehicle, setSelectedVehicle] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+
+            // Initialize Leaflet Map
+            useEffect(() => {
+                if (!mapContainerRef.current) return;
+
+                if (!mapInstanceRef.current) {
+                    // Default center: Metro Manila logistics grid
+                    const map = L.map(mapContainerRef.current, {
+                        center: [14.5995, 121.0188],
+                        zoom: 12,
+                        zoomControl: false
+                    });
+
+                    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+                    // Dark/Night styled CartoDB Tiles for high-tech telemetry aesthetic
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                        subdomains: 'abcd',
+                        maxZoom: 19
+                    }).addTo(map);
+
+                    mapInstanceRef.current = map;
+                }
+
+                return () => {
+                    if (mapInstanceRef.current) {
+                        mapInstanceRef.current.remove();
+                        mapInstanceRef.current = null;
+                    }
+                };
+            }, []);
+
+            // Update Vehicle Pins on Telemetry Changes
+            useEffect(() => {
+                const map = mapInstanceRef.current;
+                if (!map) return;
+
+                liveTelemetry.forEach(veh => {
+                    const lat = veh.latitude || 14.5995;
+                    const lng = veh.longitude || 121.0188;
+                    const isMoving = veh.speed > 5;
+
+                    // Custom HTML marker pin with heading pointer
+                    const iconHtml = `
+                        <div style="position: relative; width: 36px; height: 36px; display: flex; items-center; justify-content: center;">
+                            ${isMoving ? '<div class="vehicle-marker-pulse" style="position: absolute; inset: -4px; border-radius: 9999px; background: rgba(99, 102, 241, 0.4);"></div>' : ''}
+                            <div style="width: 32px; height: 32px; border-radius: 9999px; background: ${isMoving ? '#4f46e5' : '#475569'}; border: 2px solid #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transform: rotate(${veh.heading || 0}deg);">
+                                <svg style="width: 16px; height: 16px; color: white;" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    `;
+
+                    const customIcon = L.divIcon({
+                        html: iconHtml,
+                        className: 'custom-vehicle-div-icon',
+                        iconSize: [36, 36],
+                        iconAnchor: [18, 18]
+                    });
+
+                    if (markersRef.current[veh.id]) {
+                        // Smoothly transition existing pin
+                        markersRef.current[veh.id].setLatLng([lat, lng]);
+                        markersRef.current[veh.id].setIcon(customIcon);
+                    } else {
+                        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
+                        
+                        marker.on('click', () => {
+                            setSelectedVehicle(veh);
+                        });
+
+                        markersRef.current[veh.id] = marker;
+                    }
+
+                    // Bind Popup
+                    const popupContent = `
+                        <div style="font-family: inherit; font-size: 12px; color: #0f172a; padding: 4px;">
+                            <div style="font-weight: 800; font-size: 13px; color: #4338ca;">${veh.plate_number}</div>
+                            <div style="color: #64748b;">${veh.vehicle_make} ${veh.vehicle_model}</div>
+                            <hr style="margin: 6px 0; border: none; border-top: 1px solid #e2e8f0;">
+                            <div><strong>Driver:</strong> ${veh.driver_name}</div>
+                            <div><strong>Speed:</strong> ${veh.speed} km/h</div>
+                            <div><strong>Fuel Level:</strong> ${veh.fuel_level}%</div>
+                            <div><strong>Odometer:</strong> ${veh.mileage.toLocaleString()} KM</div>
+                        </div>
+                    `;
+                    markersRef.current[veh.id].bindPopup(popupContent);
+                });
+            }, [liveTelemetry]);
+
+            // Center map on selected vehicle
+            const focusVehicle = (veh) => {
+                setSelectedVehicle(veh);
+                if (mapInstanceRef.current && markersRef.current[veh.id]) {
+                    mapInstanceRef.current.setView([veh.latitude, veh.longitude], 15, { animate: true });
+                    markersRef.current[veh.id].openPopup();
+                }
+            };
+
+            const filteredVehicles = liveTelemetry.filter(v =>
+                v.plate_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                v.driver_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                v.vehicle_model.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            return (
+                <div className="space-y-4">
+                    {/* Map Controls Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-lg">
+                        <div className="flex items-center space-x-3">
+                            <button
+                                onClick={onToggleSim}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+                                    isSimulating
+                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                                        : 'bg-brand-600 hover:bg-brand-500 text-white shadow-lg shadow-brand-600/30'
+                                }`}
+                            >
+                                {isSimulating ? <><Icons.Pause /> Pause Live Telemetry</> : <><Icons.Play /> Start Live Telemetry Feed</>}
+                            </button>
+                            <span className="text-xs text-slate-400">
+                                {isSimulating ? 'Simulating real-time vehicle dispatch & route breadcrumbs (3.5s tick)' : 'Feed idle'}
+                            </span>
+                        </div>
+
+                        {/* Search vehicles */}
+                        <div className="relative w-full sm:w-64">
+                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                                <Icons.Search />
+                            </span>
+                            <input
+                                type="text"
+                                placeholder="Search vehicle or driver..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Interactive Map Layout */}
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                        {/* Map Surface */}
+                        <div className="lg:col-span-3 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl relative min-h-[480px] lg:min-h-[600px]">
+                            <div ref={mapContainerRef} className="w-full h-full min-h-[480px] lg:min-h-[600px]"></div>
+
+                            {/* Floating Map Legend */}
+                            <div className="absolute top-4 left-4 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl p-3 shadow-lg text-xs space-y-1.5 hidden sm:block">
+                                <div className="font-bold text-white mb-1">Fleet Telemetry Map</div>
+                                <div className="flex items-center gap-2 text-slate-300">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-brand-500 animate-pulse"></span>
+                                    <span>Active In-Transit ({liveTelemetry.filter(v => v.speed > 5).length})</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-slate-300">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+                                    <span>Stationary / Parked ({liveTelemetry.filter(v => v.speed <= 5).length})</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Vehicle Sidebar Selector */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col h-[480px] lg:h-[600px]">
+                            <h4 className="font-bold text-white text-xs uppercase tracking-wider mb-3 flex items-center justify-between">
+                                <span>Tracked Vehicles ({filteredVehicles.length})</span>
+                                <span className="text-brand-400 font-mono">SQLite Ingest</span>
+                            </h4>
+
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                                {filteredVehicles.map(veh => {
+                                    const isSelected = selectedVehicle && selectedVehicle.id === veh.id;
+                                    const isMoving = veh.speed > 5;
+                                    return (
+                                        <div
+                                            key={veh.id}
+                                            onClick={() => focusVehicle(veh)}
+                                            className={`p-3 rounded-xl border cursor-pointer transition ${
+                                                isSelected
+                                                    ? 'bg-brand-900/40 border-brand-500 shadow-md shadow-brand-500/20'
+                                                    : 'bg-slate-850 hover:bg-slate-800 border-slate-800'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold text-xs text-white">{veh.plate_number}</span>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                                                    isMoving ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'
+                                                }`}>
+                                                    {isMoving ? `${veh.speed} km/h` : 'Parked'}
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-400 mt-1">{veh.vehicle_make} {veh.vehicle_model}</div>
+                                            <div className="text-[10px] text-brand-300 mt-0.5">Driver: {veh.driver_name}</div>
+                                            <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1.5 border-t border-slate-800">
+                                                <span>Fuel: {veh.fuel_level}%</span>
+                                                <span>{veh.mileage.toLocaleString()} KM</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 4. Trip Tickets Tracking & Entry View
+        // ========================================================
+        function TripsView({ currentUser, showToast }) {
+            const [trips, setTrips] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [vehicles, setVehicles] = useState([]);
+            const [riders, setRiders] = useState([]);
+            const [filterStatus, setFilterStatus] = useState('');
+
+            // Form state
+            const [formData, setFormData] = useState({
+                ticket_number: `TRIP-${Math.floor(1000 + Math.random() * 9000)}`,
+                date: new Date().toISOString().split('T')[0],
+                vehicle: '',
+                driver: '',
+                origin: 'Central Operations Hub',
+                destination: 'Client Fulfillment Center',
+                purpose: 'Freight Dispatch & Customer Routing',
+                start_odometer: 15000,
+                end_odometer: 15065,
+                status: 'Completed',
+            });
+
+            const loadTrips = useCallback(async () => {
+                setLoading(true);
+                try {
+                    let url = '/trip-tickets/';
+                    if (filterStatus) url += `?status=${filterStatus}`;
+                    const res = await apiRequest(url);
+                    setTrips(res.results || res);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            }, [filterStatus]);
+
+            useEffect(() => {
+                loadTrips();
+                const loadOptions = async () => {
+                    try {
+                        const [vRes, rRes] = await Promise.all([
+                            apiRequest('/vehicles/'),
+                            apiRequest('/riders/')
+                        ]);
+                        const vList = vRes.results || vRes;
+                        const rList = rRes.results || rRes;
+                        setVehicles(vList);
+                        setRiders(rList);
+                        if (vList.length > 0) {
+                            setFormData(prev => ({
+                                ...prev,
+                                vehicle: vList[0].id,
+                                start_odometer: Number(vList[0].mileage),
+                                end_odometer: Number(vList[0].mileage) + 45
+                            }));
+                        }
+                        if (rList.length > 0) {
+                            setFormData(prev => ({ ...prev, driver: rList[0].id }));
+                        }
+                    } catch (e) {}
+                };
+                loadOptions();
+            }, [loadTrips]);
+
+            const handleSubmitTrip = async (e) => {
+                e.preventDefault();
+                try {
+                    await apiRequest('/trip-tickets/', {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    });
+                    showToast("Trip ticket recorded successfully!");
+                    setIsModalOpen(false);
+                    loadTrips();
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+
+            return (
+                <div className="space-y-4">
+                    {/* Trips Action Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-lg">
+                        <div className="flex items-center space-x-3">
+                            <select
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                                className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                            >
+                                <option value="">All Trip Statuses</option>
+                                <option value="Completed">Completed</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Scheduled">Scheduled</option>
+                            </select>
+                            <span className="text-xs text-slate-400">Total: {trips.length} Trips</span>
+                        </div>
+
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg shadow-brand-600/30"
+                        >
+                            <Icons.Plus /> Log New Trip Ticket
+                        </button>
+                    </div>
+
+                    {/* Trips Table */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-850 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                                    <tr>
+                                        <th className="p-3.5">Ticket #</th>
+                                        <th className="p-3.5">Date</th>
+                                        <th className="p-3.5">Driver</th>
+                                        <th className="p-3.5">Vehicle</th>
+                                        <th className="p-3.5">Route</th>
+                                        <th className="p-3.5 text-right">Odometer (Start → End)</th>
+                                        <th className="p-3.5 text-right">Distance</th>
+                                        <th className="p-3.5 text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan="8" className="p-8 text-center text-slate-400">Loading trips...</td>
+                                        </tr>
+                                    ) : trips.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="8" className="p-8 text-center text-slate-400">No trips recorded yet.</td>
+                                        </tr>
+                                    ) : (
+                                        trips.map(trip => (
+                                            <tr key={trip.id} className="hover:bg-slate-800/40 transition">
+                                                <td className="p-3.5 font-bold text-white font-mono">{trip.ticket_number}</td>
+                                                <td className="p-3.5 text-slate-300">{trip.date}</td>
+                                                <td className="p-3.5 font-medium text-slate-200">
+                                                    {trip.driver_detail ? trip.driver_detail.driver_name : 'Assigned Driver'}
+                                                </td>
+                                                <td className="p-3.5 text-slate-300 font-mono">
+                                                    {trip.vehicle_detail ? trip.vehicle_detail.plate_number : 'Vehicle'}
+                                                </td>
+                                                <td className="p-3.5 text-slate-400 truncate max-w-xs">
+                                                    {trip.origin} → {trip.destination}
+                                                </td>
+                                                <td className="p-3.5 text-right text-slate-300 font-mono">
+                                                    {trip.start_odometer} → {trip.end_odometer}
+                                                </td>
+                                                <td className="p-3.5 text-right font-bold text-emerald-400 font-mono">
+                                                    +{trip.total_distance} KM
+                                                </td>
+                                                <td className="p-3.5 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                        trip.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-300' :
+                                                        trip.status === 'In Progress' ? 'bg-amber-500/20 text-amber-300' :
+                                                        'bg-slate-700 text-slate-300'
+                                                    }`}>
+                                                        {trip.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* New Trip Ticket Modal */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                    <h3 className="font-bold text-white text-base">New Trip Ticket Entry</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><Icons.X /></button>
+                                </div>
+                                <form onSubmit={handleSubmitTrip} className="space-y-3 text-xs">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Ticket Number</label>
+                                            <input
+                                                type="text"
+                                                value={formData.ticket_number}
+                                                onChange={e => setFormData({ ...formData, ticket_number: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Date</label>
+                                            <input
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={e => setFormData({ ...formData, date: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Vehicle</label>
+                                            <select
+                                                value={formData.vehicle}
+                                                onChange={e => setFormData({ ...formData, vehicle: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            >
+                                                {vehicles.map(v => (
+                                                    <option key={v.id} value={v.id}>{v.plate_number} ({v.vehicle_make} {v.vehicle_model})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Driver</label>
+                                            <select
+                                                value={formData.driver}
+                                                onChange={e => setFormData({ ...formData, driver: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            >
+                                                {riders.map(r => (
+                                                    <option key={r.id} value={r.id}>{r.driver_name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Origin Hub</label>
+                                            <input
+                                                type="text"
+                                                value={formData.origin}
+                                                onChange={e => setFormData({ ...formData, origin: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Destination</label>
+                                            <input
+                                                type="text"
+                                                value={formData.destination}
+                                                onChange={e => setFormData({ ...formData, destination: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Start Odometer (KM)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={formData.start_odometer}
+                                                onChange={e => setFormData({ ...formData, start_odometer: parseFloat(e.target.value) })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">End Odometer (KM)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={formData.end_odometer}
+                                                onChange={e => setFormData({ ...formData, end_odometer: parseFloat(e.target.value) })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsModalOpen(false)}
+                                            className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl"
+                                        >
+                                            Save Trip Ticket
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 5. Fuel Logs Ledger View
+        // ========================================================
+        function FuelLogsView({ currentUser, showToast }) {
+            const [fuelLogs, setFuelLogs] = useState([]);
+            const [vehicles, setVehicles] = useState([]);
+            const [riders, setRiders] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+
+            const [formData, setFormData] = useState({
+                receipt_number: `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+                date: new Date().toISOString().split('T')[0],
+                fuel_station: 'Shell Helix Fleet Hub',
+                vehicle: '',
+                driver: '',
+                liters: 35.5,
+                cost_per_liter: 62.40,
+                odometer_reading: 15200,
+                notes: 'Standard authorized fleet card refill',
+            });
+
+            const loadLogs = async () => {
+                setLoading(true);
+                try {
+                    const res = await apiRequest('/fuel-logs/');
+                    setFuelLogs(res.results || res);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                loadLogs();
+                const loadMeta = async () => {
+                    try {
+                        const [vRes, rRes] = await Promise.all([
+                            apiRequest('/vehicles/'),
+                            apiRequest('/riders/')
+                        ]);
+                        const vList = vRes.results || vRes;
+                        const rList = rRes.results || rRes;
+                        setVehicles(vList);
+                        setRiders(rList);
+                        if (vList.length > 0) setFormData(p => ({ ...p, vehicle: vList[0].id }));
+                        if (rList.length > 0) setFormData(p => ({ ...p, driver: rList[0].id }));
+                    } catch (e) {}
+                };
+                loadMeta();
+            }, []);
+
+            const totalAmountCalc = (formData.liters * formData.cost_per_liter).toFixed(2);
+
+            const handleSubmitFuel = async (e) => {
+                e.preventDefault();
+                try {
+                    await apiRequest('/fuel-logs/', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            ...formData,
+                            total_amount: parseFloat(totalAmountCalc)
+                        })
+                    });
+                    showToast("Fuel receipt logged successfully!");
+                    setIsModalOpen(false);
+                    loadLogs();
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+
+            // Totals
+            const totalLiters = fuelLogs.reduce((acc, l) => acc + parseFloat(l.liters || 0), 0);
+            const totalCost = fuelLogs.reduce((acc, l) => acc + parseFloat(l.total_amount || 0), 0);
+
+            return (
+                <div className="space-y-4">
+                    {/* Fuel Header Metrics & Action */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow">
+                            <span className="text-xs text-slate-400 font-semibold uppercase">Total Fuel Refilled</span>
+                            <div className="text-2xl font-bold text-white mt-1">{totalLiters.toFixed(1)} L</div>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow">
+                            <span className="text-xs text-slate-400 font-semibold uppercase">Total Fuel Spend</span>
+                            <div className="text-2xl font-bold text-amber-400 mt-1">${totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow flex items-center justify-between">
+                            <div>
+                                <span className="text-xs text-slate-400 font-semibold uppercase">Logged Receipts</span>
+                                <div className="text-2xl font-bold text-white mt-1">{fuelLogs.length}</div>
+                            </div>
+                            <button
+                                onClick={() => setIsModalOpen(true)}
+                                className="px-3.5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                            >
+                                <Icons.Plus /> Log Refill
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Fuel Logs Table */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-850 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                                    <tr>
+                                        <th className="p-3.5">Receipt #</th>
+                                        <th className="p-3.5">Date</th>
+                                        <th className="p-3.5">Station Vendor</th>
+                                        <th className="p-3.5">Vehicle</th>
+                                        <th className="p-3.5">Driver</th>
+                                        <th className="p-3.5 text-right">Liters</th>
+                                        <th className="p-3.5 text-right">Cost/L</th>
+                                        <th className="p-3.5 text-right">Total Cost</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60">
+                                    {loading ? (
+                                        <tr><td colSpan="8" className="p-8 text-center text-slate-400">Loading fuel logs...</td></tr>
+                                    ) : fuelLogs.length === 0 ? (
+                                        <tr><td colSpan="8" className="p-8 text-center text-slate-400">No fuel logs found.</td></tr>
+                                    ) : (
+                                        fuelLogs.map(log => (
+                                            <tr key={log.id} className="hover:bg-slate-800/40 transition">
+                                                <td className="p-3.5 font-bold text-white font-mono">{log.receipt_number}</td>
+                                                <td className="p-3.5 text-slate-300">{log.date}</td>
+                                                <td className="p-3.5 text-slate-300 font-medium">{log.fuel_station}</td>
+                                                <td className="p-3.5 text-slate-400 font-mono">{log.vehicle_detail ? log.vehicle_detail.plate_number : ''}</td>
+                                                <td className="p-3.5 text-slate-400">{log.driver_detail ? log.driver_detail.driver_name : ''}</td>
+                                                <td className="p-3.5 text-right font-mono text-white">{parseFloat(log.liters).toFixed(2)} L</td>
+                                                <td className="p-3.5 text-right font-mono text-slate-400">${parseFloat(log.cost_per_liter).toFixed(2)}</td>
+                                                <td className="p-3.5 text-right font-mono font-bold text-amber-400">${parseFloat(log.total_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Fuel Modal */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                    <h3 className="font-bold text-white text-base">Record Fuel Receipt</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white"><Icons.X /></button>
+                                </div>
+                                <form onSubmit={handleSubmitFuel} className="space-y-3 text-xs">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Receipt Number</label>
+                                            <input
+                                                type="text"
+                                                value={formData.receipt_number}
+                                                onChange={e => setFormData({ ...formData, receipt_number: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Date</label>
+                                            <input
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={e => setFormData({ ...formData, date: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-slate-400 block mb-1">Gas Station / Vendor</label>
+                                        <input
+                                            type="text"
+                                            value={formData.fuel_station}
+                                            onChange={e => setFormData({ ...formData, fuel_station: e.target.value })}
+                                            required
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Vehicle</label>
+                                            <select
+                                                value={formData.vehicle}
+                                                onChange={e => setFormData({ ...formData, vehicle: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            >
+                                                {vehicles.map(v => (
+                                                    <option key={v.id} value={v.id}>{v.plate_number}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Driver</label>
+                                            <select
+                                                value={formData.driver}
+                                                onChange={e => setFormData({ ...formData, driver: e.target.value })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            >
+                                                {riders.map(r => (
+                                                    <option key={r.id} value={r.id}>{r.driver_name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Liters Pumped</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={formData.liters}
+                                                onChange={e => setFormData({ ...formData, liters: parseFloat(e.target.value) || 0 })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Cost per Liter ($)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={formData.cost_per_liter}
+                                                onChange={e => setFormData({ ...formData, cost_per_liter: parseFloat(e.target.value) || 0 })}
+                                                required
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 bg-slate-850 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                                        <span className="text-slate-400">Calculated Total:</span>
+                                        <span className="text-base font-bold text-amber-400 font-mono">${totalAmountCalc}</span>
+                                    </div>
+
+                                    <div className="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsModalOpen(false)}
+                                            className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl"
+                                        >
+                                            Save Fuel Log
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 6. Automated Maintenance Alerts & Schedules View
+        // ========================================================
+        function MaintenanceView({ alerts, onRefresh, showToast, currentUser }) {
+            const [selectedAlert, setSelectedAlert] = useState(null);
+            const [resolveModalOpen, setResolveModalOpen] = useState(false);
+            const [resolveData, setResolveData] = useState({
+                cost: 3200,
+                technician: 'Engr. J. Santos',
+                service_provider: 'Shell Helix Official Fleet Center',
+                notes: 'Service successfully executed, fluid levels inspected, reset maintenance flag.'
+            });
+
+            const handleResolveSubmit = async (e) => {
+                e.preventDefault();
+                if (!selectedAlert) return;
+                try {
+                    await apiRequest(`/maintenance/alerts/${selectedAlert.id}/resolve/`, {
+                        method: 'POST',
+                        body: JSON.stringify(resolveData)
+                    });
+                    showToast("Maintenance completed and next due mileage updated!");
+                    setResolveModalOpen(false);
+                    onRefresh();
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-lg">
+                        <div>
+                            <h3 className="font-bold text-white text-base flex items-center gap-2">
+                                <Icons.Wrench /> Automated Maintenance Alerts
+                            </h3>
+                            <p className="text-xs text-slate-400">Triggered automatically when vehicle mileage reaches scheduled thresholds</p>
+                        </div>
+                        <span className="text-xs px-3 py-1 bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded-xl font-bold">
+                            {alerts.length} Active System Alerts
+                        </span>
+                    </div>
+
+                    {/* Alerts Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {alerts.length === 0 ? (
+                            <div className="col-span-full bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                                <Icons.CheckCircle />
+                                <p className="mt-2 text-sm font-semibold text-emerald-400">All fleet vehicles in compliance</p>
+                                <p className="text-xs text-slate-500">No overdue service intervals detected.</p>
+                            </div>
+                        ) : (
+                            alerts.map(alert => {
+                                const isCritical = alert.severity === 'critical';
+                                return (
+                                    <div
+                                        key={alert.id}
+                                        className={`rounded-2xl p-5 border shadow-lg flex flex-col justify-between ${
+                                            isCritical 
+                                                ? 'bg-rose-950/20 border-rose-600/50 shadow-rose-950/20' 
+                                                : 'bg-amber-950/20 border-amber-600/40 shadow-amber-950/20'
+                                        }`}
+                                    >
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                    isCritical ? 'bg-rose-600 text-white animate-pulse' : 'bg-amber-500 text-slate-950'
+                                                }`}>
+                                                    {alert.severity}
+                                                </span>
+                                                <span className="text-xs font-mono font-bold text-white">{alert.vehicle_plate}</span>
+                                            </div>
+
+                                            <h4 className="font-bold text-white text-sm mt-1">{alert.service_type}</h4>
+                                            <p className="text-xs text-slate-300 mt-1">{alert.message}</p>
+                                            
+                                            <div className="mt-4 p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-[11px] space-y-1 font-mono">
+                                                <div className="flex justify-between text-slate-400">
+                                                    <span>Current Odometer:</span>
+                                                    <span className="text-white font-bold">{alert.current_odometer} KM</span>
+                                                </div>
+                                                <div className="flex justify-between text-slate-400">
+                                                    <span>Threshold Due:</span>
+                                                    <span className="text-brand-300">{alert.due_odometer} KM</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={() => { setSelectedAlert(alert); setResolveModalOpen(true); }}
+                                            className="mt-4 w-full py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5"
+                                        >
+                                            <Icons.CheckCircle /> Mark Serviced & Log Cost
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* Resolve Modal */}
+                    {resolveModalOpen && selectedAlert && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                    <h3 className="font-bold text-white text-base">Complete Vehicle Service</h3>
+                                    <button onClick={() => setResolveModalOpen(false)} className="text-slate-400 hover:text-white"><Icons.X /></button>
+                                </div>
+                                <p className="text-xs text-slate-300">
+                                    Resolve <strong className="text-white">{selectedAlert.service_type}</strong> for vehicle <strong className="text-brand-400">{selectedAlert.vehicle_plate}</strong>.
+                                </p>
+                                <form onSubmit={handleResolveSubmit} className="space-y-3 text-xs">
+                                    <div>
+                                        <label className="text-slate-400 block mb-1">Service Cost ($)</label>
+                                        <input
+                                            type="number"
+                                            value={resolveData.cost}
+                                            onChange={e => setResolveData({ ...resolveData, cost: parseFloat(e.target.value) || 0 })}
+                                            required
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-slate-400 block mb-1">Technician / Mechanic Name</label>
+                                        <input
+                                            type="text"
+                                            value={resolveData.technician}
+                                            onChange={e => setResolveData({ ...resolveData, technician: e.target.value })}
+                                            required
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-slate-400 block mb-1">Service Center / Vendor</label>
+                                        <input
+                                            type="text"
+                                            value={resolveData.service_provider}
+                                            onChange={e => setResolveData({ ...resolveData, service_provider: e.target.value })}
+                                            required
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-slate-400 block mb-1">Service Completion Notes</label>
+                                        <textarea
+                                            value={resolveData.notes}
+                                            onChange={e => setResolveData({ ...resolveData, notes: e.target.value })}
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white h-20"
+                                        />
+                                    </div>
+                                    <div className="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setResolveModalOpen(false)}
+                                            className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl"
+                                        >
+                                            Confirm Service & Update Schedule
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 7. Driver Performance Analytics View
+        // ========================================================
+        function DriverAnalyticsView() {
+            const [analytics, setAnalytics] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const chartCanvasRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+
+            useEffect(() => {
+                const loadAnalytics = async () => {
+                    try {
+                        const data = await apiRequest('/analytics/driver-performance/');
+                        setAnalytics(data);
+                    } catch (e) {
+                        console.error("Analytics fetch error:", e);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                loadAnalytics();
+            }, []);
+
+            // Render Driver Performance Bar Chart
+            useEffect(() => {
+                if (!chartCanvasRef.current || analytics.length === 0) return;
+
+                if (chartInstanceRef.current) {
+                    chartInstanceRef.current.destroy();
+                }
+
+                const ctx = chartCanvasRef.current.getContext('2d');
+                const topDrivers = analytics.slice(0, 8);
+
+                chartInstanceRef.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: topDrivers.map(d => d.name.split(' ')[0]),
+                        datasets: [
+                            {
+                                label: 'Safety Score (0-100)',
+                                data: topDrivers.map(d => d.safety_score),
+                                backgroundColor: 'rgba(99, 102, 241, 0.85)',
+                                borderRadius: 8,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Efficiency (KM / L)',
+                                data: topDrivers.map(d => d.fuel_efficiency_km_l || 10.5),
+                                backgroundColor: 'rgba(16, 185, 129, 0.85)',
+                                borderRadius: 8,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#cbd5e1', font: { family: 'inherit', size: 11 } }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                max: 100,
+                                ticks: { color: '#818cf8' },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                position: 'right',
+                                max: 25,
+                                ticks: { color: '#34d399' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartInstanceRef.current) {
+                        chartInstanceRef.current.destroy();
+                        chartInstanceRef.current = null;
+                    }
+                };
+            }, [analytics]);
+
+            return (
+                <div className="space-y-6">
+                    {/* Header */}
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow flex items-center justify-between">
+                        <div>
+                            <h3 className="font-bold text-white text-base flex items-center gap-2">
+                                <Icons.ShieldAlert /> Driver Performance & Safety Analytics
+                            </h3>
+                            <p className="text-xs text-slate-400">Calculated from real-time GPS telemetry events (Harsh Braking, Speeding, Rapid Acceleration)</p>
+                        </div>
+                        <span className="text-xs px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl font-bold">
+                            Live Telemetry Scoring
+                        </span>
+                    </div>
+
+                    {/* Chart Container */}
+                    <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
+                        <h4 className="text-xs font-semibold uppercase text-slate-400 mb-4">Driver Safety Score vs Fuel Economy Comparison</h4>
+                        <div className="h-64 sm:h-80 w-full">
+                            <canvas ref={chartCanvasRef}></canvas>
+                        </div>
+                    </div>
+
+                    {/* Leaderboard Table */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                            <span className="text-xs font-bold text-white uppercase tracking-wider">Driver Leaderboard</span>
+                            <span className="text-xs text-slate-400">Total: {analytics.length} Drivers</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-850 text-slate-400 uppercase tracking-wider text-[10px]">
+                                    <tr>
+                                        <th className="p-3.5">Rank</th>
+                                        <th className="p-3.5">Driver Name</th>
+                                        <th className="p-3.5">Assigned Vehicle</th>
+                                        <th className="p-3.5 text-center">Safety Score</th>
+                                        <th className="p-3.5 text-right">Distance (KM)</th>
+                                        <th className="p-3.5 text-center">Harsh Brakes</th>
+                                        <th className="p-3.5 text-center">Speeding</th>
+                                        <th className="p-3.5 text-right">Fuel Economy</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60">
+                                    {analytics.map((driver, index) => (
+                                        <tr key={driver.id} className="hover:bg-slate-800/40 transition">
+                                            <td className="p-3.5 font-bold font-mono">
+                                                {index === 0 ? <span className="text-yellow-400">🥇 #1</span> :
+                                                 index === 1 ? <span className="text-slate-300">🥈 #2</span> :
+                                                 index === 2 ? <span className="text-amber-600">🥉 #3</span> :
+                                                 <span className="text-slate-500">#{index + 1}</span>}
+                                            </td>
+                                            <td className="p-3.5 font-bold text-white">{driver.name}</td>
+                                            <td className="p-3.5 text-slate-400 font-mono">{driver.assigned_vehicle}</td>
+                                            <td className="p-3.5 text-center">
+                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                                                    driver.safety_score >= 95 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                                    driver.safety_score >= 90 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                                    'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                }`}>
+                                                    {driver.safety_score}%
+                                                </span>
+                                            </td>
+                                            <td className="p-3.5 text-right font-mono text-slate-200">{driver.total_distance_km.toLocaleString()} KM</td>
+                                            <td className="p-3.5 text-center font-mono text-slate-400">{driver.harsh_braking_events}</td>
+                                            <td className="p-3.5 text-center font-mono text-slate-400">{driver.speeding_events}</td>
+                                            <td className="p-3.5 text-right font-mono font-bold text-emerald-400">
+                                                {driver.fuel_efficiency_km_l > 0 ? `${driver.fuel_efficiency_km_l} km/L` : '12.4 km/L'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 8. Comprehensive Monthly Efficiency Reports View
+        // ========================================================
+        function MonthlyReportsView() {
+            const [reportData, setReportData] = useState(null);
+            const [monthsCount, setMonthsCount] = useState(6);
+            const [loading, setLoading] = useState(true);
+            const chartCanvasRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+
+            useEffect(() => {
+                const loadReports = async () => {
+                    setLoading(true);
+                    try {
+                        const data = await apiRequest(`/reports/monthly/?months=${monthsCount}`);
+                        setReportData(data);
+                    } catch (e) {
+                        console.error("Report fetch error:", e);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                loadReports();
+            }, [monthsCount]);
+
+            // Monthly Trend Chart
+            useEffect(() => {
+                if (!chartCanvasRef.current || !reportData || !reportData.monthly_breakdown) return;
+
+                if (chartInstanceRef.current) {
+                    chartInstanceRef.current.destroy();
+                }
+
+                const ctx = chartCanvasRef.current.getContext('2d');
+                const breakdown = reportData.monthly_breakdown;
+
+                chartInstanceRef.current = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: breakdown.map(b => b.month_label),
+                        datasets: [
+                            {
+                                label: 'Distance Driven (KM)',
+                                data: breakdown.map(b => b.total_distance_km),
+                                borderColor: '#6366f1',
+                                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Operating Cost ($)',
+                                data: breakdown.map(b => b.total_operating_cost),
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'transparent',
+                                tension: 0.3,
+                                borderDash: [5, 5],
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#cbd5e1', font: { family: 'inherit' } }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                ticks: { color: '#818cf8' },
+                                grid: { color: 'rgba(255,255,255,0.05)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                position: 'right',
+                                ticks: { color: '#f59e0b' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartInstanceRef.current) {
+                        chartInstanceRef.current.destroy();
+                        chartInstanceRef.current = null;
+                    }
+                };
+            }, [reportData]);
+
+            const handleDownloadCsv = () => {
+                const token = getAuthToken();
+                window.location.href = `/api/reports/monthly/?format=csv&months=${monthsCount}`;
+            };
+
+            return (
+                <div className="space-y-6">
+                    {/* Header with Export & Range Selector */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-lg">
+                        <div>
+                            <h3 className="font-bold text-white text-base flex items-center gap-2">
+                                <Icons.FileText /> Comprehensive Monthly Efficiency Reports
+                            </h3>
+                            <p className="text-xs text-slate-400">Total fleet mileage, fuel consumption, operating costs, and cost-per-kilometer</p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <select
+                                value={monthsCount}
+                                onChange={(e) => setMonthsCount(Number(e.target.value))}
+                                className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white"
+                            >
+                                <option value="3">Last 3 Months</option>
+                                <option value="6">Last 6 Months</option>
+                                <option value="12">Last 12 Months</option>
+                            </select>
+                            <button
+                                onClick={handleDownloadCsv}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-emerald-600/30"
+                            >
+                                <Icons.Download /> Export CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Summary KPI Cards */}
+                    {reportData && reportData.summary && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                                <span className="text-xs text-slate-400 font-semibold uppercase">Period Distance</span>
+                                <div className="text-2xl font-bold text-white mt-1">{reportData.summary.period_distance_km.toLocaleString()} KM</div>
+                            </div>
+                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                                <span className="text-xs text-slate-400 font-semibold uppercase">Fuel Consumed</span>
+                                <div className="text-2xl font-bold text-indigo-400 mt-1">{reportData.summary.period_fuel_liters.toLocaleString()} L</div>
+                            </div>
+                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                                <span className="text-xs text-slate-400 font-semibold uppercase">Total Operating Cost</span>
+                                <div className="text-2xl font-bold text-amber-400 mt-1">${reportData.summary.period_total_spend.toLocaleString()}</div>
+                            </div>
+                            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                                <span className="text-xs text-slate-400 font-semibold uppercase">Avg Cost per KM</span>
+                                <div className="text-2xl font-bold text-emerald-400 mt-1">${reportData.summary.avg_cost_per_km}/km</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Chart */}
+                    <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-lg">
+                        <h4 className="text-xs font-semibold uppercase text-slate-400 mb-4">Monthly Fleet Trajectory Trend</h4>
+                        <div className="h-64 sm:h-80 w-full">
+                            <canvas ref={chartCanvasRef}></canvas>
+                        </div>
+                    </div>
+
+                    {/* Monthly Detailed Breakdown Table */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="p-4 border-b border-slate-800">
+                            <span className="text-xs font-bold text-white uppercase tracking-wider">Monthly Breakdown Ledger</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-850 text-slate-400 uppercase tracking-wider text-[10px]">
+                                    <tr>
+                                        <th className="p-3.5">Month</th>
+                                        <th className="p-3.5 text-right">Trips</th>
+                                        <th className="p-3.5 text-right">Distance (KM)</th>
+                                        <th className="p-3.5 text-right">Fuel (Liters)</th>
+                                        <th className="p-3.5 text-right">Fuel Cost ($)</th>
+                                        <th className="p-3.5 text-right">Maintenance ($)</th>
+                                        <th className="p-3.5 text-right">Total Operating ($)</th>
+                                        <th className="p-3.5 text-right">Cost/KM</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60">
+                                    {reportData && reportData.monthly_breakdown ? (
+                                        reportData.monthly_breakdown.map((row, idx) => (
+                                            <tr key={idx} className="hover:bg-slate-800/40 transition">
+                                                <td className="p-3.5 font-bold text-white">{row.month_label}</td>
+                                                <td className="p-3.5 text-right font-mono text-slate-300">{row.trips_count}</td>
+                                                <td className="p-3.5 text-right font-mono text-slate-200">{row.total_distance_km.toLocaleString()} KM</td>
+                                                <td className="p-3.5 text-right font-mono text-slate-300">{row.total_fuel_liters.toLocaleString()} L</td>
+                                                <td className="p-3.5 text-right font-mono text-amber-300">${row.total_fuel_cost.toLocaleString()}</td>
+                                                <td className="p-3.5 text-right font-mono text-rose-300">${row.total_maintenance_cost.toLocaleString()}</td>
+                                                <td className="p-3.5 text-right font-mono font-bold text-emerald-400">${row.total_operating_cost.toLocaleString()}</td>
+                                                <td className="p-3.5 text-right font-mono text-slate-300">${row.cost_per_km}</td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr><td colSpan="8" className="p-8 text-center text-slate-400">Loading breakdown data...</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 9. Driver Mobile Cockpit View (Role: Driver)
+        // ========================================================
+        function DriverCockpitView({ currentUser, liveTelemetry, showToast, onRefresh }) {
+            const driverInfo = currentUser.driver;
+            const assignedVehicle = liveTelemetry.find(v => v.id === driverInfo?.vehicle_id) || null;
+            const [tripModalOpen, setTripModalOpen] = useState(false);
+            const [fuelModalOpen, setFuelModalOpen] = useState(false);
+
+            // Driver quick trip state
+            const [quickTrip, setQuickTrip] = useState({
+                ticket_number: `TRIP-D${Math.floor(1000 + Math.random() * 9000)}`,
+                date: new Date().toISOString().split('T')[0],
+                origin: 'Metro Depot Station',
+                destination: 'Client Delivery Point',
+                purpose: 'Standard Delivery Dispatch',
+                start_odometer: assignedVehicle ? assignedVehicle.mileage : 16000,
+                end_odometer: assignedVehicle ? assignedVehicle.mileage + 35 : 16035,
+                status: 'Completed',
+            });
+
+            // Driver quick fuel state
+            const [quickFuel, setQuickFuel] = useState({
+                receipt_number: `RCP-D${Math.floor(1000 + Math.random() * 9000)}`,
+                date: new Date().toISOString().split('T')[0],
+                fuel_station: 'Petron Expressway Station',
+                liters: 25.0,
+                cost_per_liter: 63.50,
+                odometer_reading: assignedVehicle ? assignedVehicle.mileage : 16000,
+                notes: 'Driver refueled full tank with company fuel card.',
+            });
+
+            const handleQuickTripSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await apiRequest('/trip-tickets/', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            ...quickTrip,
+                            vehicle: driverInfo.vehicle_id,
+                            driver: driverInfo.id
+                        })
+                    });
+                    showToast("Trip recorded successfully to your driver log!");
+                    setTripModalOpen(false);
+                    onRefresh();
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+
+            const handleQuickFuelSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await apiRequest('/fuel-logs/', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            ...quickFuel,
+                            vehicle: driverInfo.vehicle_id,
+                            driver: driverInfo.id,
+                            total_amount: quickFuel.liters * quickFuel.cost_per_liter
+                        })
+                    });
+                    showToast("Fuel receipt uploaded successfully!");
+                    setFuelModalOpen(false);
+                    onRefresh();
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+
+            return (
+                <div className="space-y-6 max-w-3xl mx-auto">
+                    {/* Welcome Driver Banner */}
+                    <div className="bg-gradient-to-r from-brand-900/60 via-slate-900 to-slate-900 border border-brand-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <span className="text-xs font-bold text-brand-300 uppercase tracking-widest">Driver Telematics Cockpit</span>
+                                <h3 className="text-2xl font-black text-white mt-1">Hello, {driverInfo ? driverInfo.name : currentUser.username}!</h3>
+                                <p className="text-xs text-slate-300 mt-1">Assigned Vehicle: <span className="text-brand-300 font-mono font-bold">{driverInfo ? driverInfo.vehicle_plate : 'None'}</span></p>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-3xl font-black text-emerald-400 font-mono">
+                                    {driverInfo ? `${driverInfo.safety_score}%` : '96%'}
+                                </div>
+                                <span className="text-[10px] text-slate-400 uppercase tracking-wider">Your Safety Rating</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Assigned Vehicle Live Health Card */}
+                    {assignedVehicle ? (
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-lg space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-white text-base">{assignedVehicle.vehicle_make} {assignedVehicle.vehicle_model}</h4>
+                                    <p className="text-xs text-slate-400 font-mono">Plate: {assignedVehicle.plate_number}</p>
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                    assignedVehicle.speed > 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
+                                }`}>
+                                    {assignedVehicle.speed > 0 ? `${assignedVehicle.speed} km/h (In Transit)` : 'Engine Idle / Parked'}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-slate-800 text-center">
+                                <div className="bg-slate-850 p-3 rounded-2xl">
+                                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Fuel Level</span>
+                                    <div className="text-lg font-bold text-amber-400 font-mono mt-0.5">{assignedVehicle.fuel_level}%</div>
+                                </div>
+                                <div className="bg-slate-850 p-3 rounded-2xl">
+                                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Odometer</span>
+                                    <div className="text-lg font-bold text-white font-mono mt-0.5">{assignedVehicle.mileage.toLocaleString()} KM</div>
+                                </div>
+                                <div className="bg-slate-850 p-3 rounded-2xl">
+                                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Alerts</span>
+                                    <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">{assignedVehicle.open_alerts || 0}</div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center text-slate-400">
+                            No vehicle currently bound to this driver profile.
+                        </div>
+                    )}
+
+                    {/* Quick Driver Action Buttons */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <button
+                            onClick={() => setTripModalOpen(true)}
+                            className="p-5 bg-brand-600 hover:bg-brand-500 text-white rounded-3xl font-bold flex flex-col items-center justify-center space-y-2 shadow-xl shadow-brand-600/20 transition transform active:scale-95"
+                        >
+                            <Icons.Route />
+                            <span className="text-sm">Log Completed Trip</span>
+                            <span className="text-[10px] text-brand-200 font-normal">Record route & mileage</span>
+                        </button>
+
+                        <button
+                            onClick={() => setFuelModalOpen(false || true)}
+                            className="p-5 bg-slate-850 hover:bg-slate-800 text-amber-400 border border-slate-700 rounded-3xl font-bold flex flex-col items-center justify-center space-y-2 shadow-xl transition transform active:scale-95"
+                        >
+                            <Icons.Fuel />
+                            <span className="text-sm text-white">Log Fuel Refill</span>
+                            <span className="text-[10px] text-slate-400 font-normal">Submit liters & receipt</span>
+                        </button>
+                    </div>
+
+                    {/* Driver Modal: Trip */}
+                    {tripModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                    <h3 className="font-bold text-white text-base">Driver Quick Trip Ticket</h3>
+                                    <button onClick={() => setTripModalOpen(false)} className="text-slate-400 hover:text-white"><Icons.X /></button>
+                                </div>
+                                <form onSubmit={handleQuickTripSubmit} className="space-y-3 text-xs">
+                                    <div>
+                                        <label className="text-slate-400 block mb-1">Ticket Number</label>
+                                        <input
+                                            type="text"
+                                            value={quickTrip.ticket_number}
+                                            onChange={e => setQuickTrip({ ...quickTrip, ticket_number: e.target.value })}
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Origin</label>
+                                            <input
+                                                type="text"
+                                                value={quickTrip.origin}
+                                                onChange={e => setQuickTrip({ ...quickTrip, origin: e.target.value })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Destination</label>
+                                            <input
+                                                type="text"
+                                                value={quickTrip.destination}
+                                                onChange={e => setQuickTrip({ ...quickTrip, destination: e.target.value })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Start Odometer (KM)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={quickTrip.start_odometer}
+                                                onChange={e => setQuickTrip({ ...quickTrip, start_odometer: parseFloat(e.target.value) || 0 })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">End Odometer (KM)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={quickTrip.end_odometer}
+                                                onChange={e => setQuickTrip({ ...quickTrip, end_odometer: parseFloat(e.target.value) || 0 })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="p-3 bg-slate-850 rounded-xl text-center text-xs text-emerald-400 font-bold">
+                                        Calculated Distance: {Math.max(0, quickTrip.end_odometer - quickTrip.start_odometer).toFixed(1)} KM
+                                    </div>
+                                    <div className="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                                        <button type="button" onClick={() => setTripModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancel</button>
+                                        <button type="submit" className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold">Submit Trip Ticket</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Driver Modal: Fuel */}
+                    {fuelModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                                    <h3 className="font-bold text-white text-base">Driver Fuel Receipt Entry</h3>
+                                    <button onClick={() => setFuelModalOpen(false)} className="text-slate-400 hover:text-white"><Icons.X /></button>
+                                </div>
+                                <form onSubmit={handleQuickFuelSubmit} className="space-y-3 text-xs">
+                                    <div>
+                                        <label className="text-slate-400 block mb-1">Gas Station / Vendor</label>
+                                        <input
+                                            type="text"
+                                            value={quickFuel.fuel_station}
+                                            onChange={e => setQuickFuel({ ...quickFuel, fuel_station: e.target.value })}
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Liters Pumped</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={quickFuel.liters}
+                                                onChange={e => setQuickFuel({ ...quickFuel, liters: parseFloat(e.target.value) || 0 })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-slate-400 block mb-1">Price per Liter ($)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={quickFuel.cost_per_liter}
+                                                onChange={e => setQuickFuel({ ...quickFuel, cost_per_liter: parseFloat(e.target.value) || 0 })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="p-3 bg-slate-850 rounded-xl text-center text-xs text-amber-400 font-bold">
+                                        Total Amount: ${(quickFuel.liters * quickFuel.cost_per_liter).toFixed(2)}
+                                    </div>
+                                    <div className="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+                                        <button type="button" onClick={() => setFuelModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">Cancel</button>
+                                        <button type="submit" className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold">Submit Fuel Receipt</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ========================================================
+        // 10. Admin User & Role Management View (Role: Admin Only)
+        // ========================================================
+        function UserManagementView({ showToast }) {
+            const [users, setUsers] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            const loadUsers = async () => {
+                setLoading(true);
+                try {
+                    const data = await apiRequest('/users/');
+                    setUsers(data.results || data);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                loadUsers();
+            }, []);
+
+            const handleRoleChange = async (userId, newRole) => {
+                try {
+                    await apiRequest(`/users/${userId}/update_role/`, {
+                        method: 'POST',
+                        body: JSON.stringify({ role: newRole })
+                    });
+                    showToast(`Updated user role to ${newRole}!`);
+                    loadUsers();
+                } catch (e) {
+                    showToast(e.message, 'error');
+                }
+            };
+
+            return (
+                <div className="space-y-4">
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow flex items-center justify-between">
+                        <div>
+                            <h3 className="font-bold text-white text-base flex items-center gap-2">
+                                <Icons.Users /> Role-Based Access Control (RBAC) Management
+                            </h3>
+                            <p className="text-xs text-slate-400">Manage user accounts and role assignments (Admin, Fleet Manager, Driver)</p>
+                        </div>
+                        <span className="text-xs font-mono font-bold px-3 py-1 bg-brand-500/20 text-brand-300 rounded-xl border border-brand-500/30">
+                            Superuser Authority
+                        </span>
+                    </div>
+
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-850 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                                    <tr>
+                                        <th className="p-3.5">ID</th>
+                                        <th className="p-3.5">Username</th>
+                                        <th className="p-3.5">Full Name</th>
+                                        <th className="p-3.5">Email</th>
+                                        <th className="p-3.5">Linked Driver</th>
+                                        <th className="p-3.5">Current Role</th>
+                                        <th className="p-3.5 text-right">Change Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/60">
+                                    {users.map(u => (
+                                        <tr key={u.id} className="hover:bg-slate-800/40 transition">
+                                            <td className="p-3.5 font-mono text-slate-500">#{u.id}</td>
+                                            <td className="p-3.5 font-bold text-white">{u.username}</td>
+                                            <td className="p-3.5 text-slate-300">{u.first_name} {u.last_name}</td>
+                                            <td className="p-3.5 text-slate-400">{u.email}</td>
+                                            <td className="p-3.5 text-brand-300 font-medium">{u.driver_name || 'None'}</td>
+                                            <td className="p-3.5">
+                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                    u.role === 'admin' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' :
+                                                    u.role === 'manager' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+                                                    'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                                }`}>
+                                                    {u.role || 'driver'}
+                                                </span>
+                                            </td>
+                                            <td className="p-3.5 text-right">
+                                                <select
+                                                    value={u.role || 'driver'}
+                                                    onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                                    className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white"
+                                                >
+                                                    <option value="admin">Administrator</option>
+                                                    <option value="manager">Fleet Manager</option>
+                                                    <option value="driver">Driver</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Mount React application into DOM
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
